@@ -190,12 +190,18 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
     # Get the first row of the Excel file to use as the fieldnames
     excelFields = sht.row_values(0)
 
-    # Strip whitespace from excelFields
-    # This is done because the fields in some content models have an extra whitespace on the end of the field name
+    # Check that all characters are UTF-8
+    # Strip whitespace and carriage returns from excelFields because the fields
+    # in some content models have an extra whitespace on the end of the field name
     # We need to remove this or the field won't match the schema fields
     for i, eF in enumerate(excelFields):
-        excelFields[i] = eF.replace(" ","")
-        excelFields[i] = excelFields[i].encode('UTF-8')
+        try:
+            excelFields[i] = eF.encode('UTF-8')
+        except:
+            arcpy.AddMessage("  Found an unrecognized character in column #" + i + " of the field names.")
+            raise Exception ("Field Name Failure.")  
+        excelFields[i] = excelFields[i].replace(" ","")
+        excelFields[i] = excelFields[i].replace("\n","")    
     del i, eF
     
     arcpy.AddMessage("Validating Excel file fields against the schema ...")
@@ -358,9 +364,9 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Indicates a different coordinate system than previous row. Make SRS field values consistent.")
                 raise Exception ("Validation Failed.")  
             
-            # If the current field is a required field but it's empty put in a placeholder
-            # Otherwise make sure it matches its type
+            # If the cell value is empty
             if (val == ""):
+                # If the field is required change the value to a placeholder value 
                 if (schemaReq[x] != "0"):
                     if (schemaTypes[x] == "Text"):
                         if warnMsgCount <= maxWarnMsg:
@@ -377,38 +383,52 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
                             arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Required Date field empty. Changing to \'1/1/1900T00:00.\'")
                             warnMsgCount = warnMsgCount + 1
                         row[x] = datetime.datetime.strptime("1/1/1900T00:00", "%m/%d/%YT%H:%M")
+                # If the field is not required change the value to None
                 else:
                     row[x] = None
+            # If cell value is not empty check the data type
             else:
+                # If the data type is supposed to be Text
                 if (schemaTypes[x] == "Text"):
+                    # Make sure the cell value is text
                     try:
                         val
+                    # If the value of the cell is not text
                     except:
+                        # If the field is required change the value to a placeholder value
                         if (schemaReq[x] != "0"):
                             if warnMsgCount <= maxWarnMsg:
                                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Text. Changing \'" + val + "\' to \'Missing.\'")
                                 warnMsgCount = warnMsgCount + 1
                             row[x] = "Missing"
+                        # Otherwise change the value to None
                         else:
                             if warnMsgCount <= maxWarnMsg:
                                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Text. Field not required. Changing \'" + val + "\' to Null.")
                                 warnMsgCount = warnMsgCount + 1
                             row[x] = None
+                # If the data type is supposed to be Double
                 elif (schemaTypes[x] == "Double"):
+                    # Try to cast the data as a float
                     try:
                         float(val)
+                    # If the value can't be cast as a float
                     except:
+                        # If the field is required change the value to a placeholder value 
                         if (schemaReq[x] != "0"):
                             if warnMsgCount <= maxWarnMsg:
                                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Double. Changing \'" + val + "\' to \'-9999.\'")
                                 warnMsgCount = warnMsgCount + 1
                             row[x] = "-9999"
+                        # Otherwise change the value to None
                         else:
                             if warnMsgCount <= maxWarnMsg:
                                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Double. Field not required. Changing \'" + val + "\' to Null.")
                                 warnMsgCount = warnMsgCount + 1
-                            row[x] = None    
+                            row[x] = None
+                # If the data type is supposed to be Double     
                 elif (schemaTypes[x] == "Date"):
+                    # Try to convert strings or unicode text to a date
                     if isinstance(val, str) or isinstance(val, unicode):
                         try:                   
                             date = datetime.datetime.strptime(row[x], "%Y-%m-%dT%H:%M:%S")
@@ -421,31 +441,40 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
                                 except:
                                     try:
                                         date = datetime.datetime.strptime(row[x], "%m/%d/%YT%H:%M")
+                                    # If the value can't be converted
                                     except:
+                                        # If the field is required change the value to a placeholder value  
                                         if (schemaReq[x] != "0"):                                
                                             arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Not recognized as a date (" + val + ")")
                                             raise Exception ("Validation Failed.")
+                                        # Otherwise change the value to None
                                         else:
                                             if warnMsgCount <= maxWarnMsg:
                                                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Date. Field not required. Changing \'" + val + "\' to Null.")
                                                 warnMsgCount = warnMsgCount + 1
                                             row[x] = None                                
-                        row[x] = date
+                    # If the cell value is not a string or unicode
+                    else:
+                        # Try to see if it is a timestamp and convert it
+                        try:
+                            date = datetime.datetime.fromtimestamp(row[x])
+                        # If the value can't be converted to a date
+                        except:
+                            # If the field is required change the value to a placeholder value  
+                            if (schemaReq[x] != "0"):                                
+                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Not recognized as a date (" + val + ")")
+                                raise Exception ("Validation Failed.")
+                            else:
+                                # Otherwise change the value to None
+                                if warnMsgCount <= maxWarnMsg:
+                                    arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Date. Field not required. Changing \'" + val + "\' to Null.")
+                                    warnMsgCount = warnMsgCount + 1
+                                row[x] = None
+                    # Set the value in the list of items in the row to date
+                    row[x] = date
+       
+        # Append the row to the list of rows
         values.append(row)
-    
-#     # Write the error message
-#     for i, e in enumerate(errs):
-#         if e == True:
-#             if i == 0:
-#                 arcpy.AddMessage("Fatal Errors Summary:")
-#             arcpy.AddMessage("  " + errMessages[i])
-#     del i, e
-#     
-#     # Raise an exception if there was an error      
-#     for e in errs:
-#         if e == True:
-#             raise Exception ("Validation Failed.")  
-#     del e  
     
     if errURI == True:
         raise Exception ("Validation Failed.") 
