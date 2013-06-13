@@ -247,6 +247,7 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
     warnMsgCount = 0
     maxWarnMsg = 20
     
+    uris = []
     srs = "WGS84"
     
 #     # Create a list of special characters
@@ -304,7 +305,7 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
                     val = "Missing"
                     row[x] = "Missing"
                 if val != "" and val !="Missing":
-                    if val.find("http://resources.usgin.org/uri-gin/"):
+                    if val.find("http://resources.usgin.org/uri-gin/") != 0:
                         arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI needs to start with \'http://resources.usgin.org/uri-gin/\' (" + val + ")")
                         errMsgCount = errMsgCount + 1
                         errURI = True
@@ -319,6 +320,16 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
                             arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI field does not have enough components.")
                             errMsgCount = errMsgCount + 1
                             errURI = True
+                    # Try to get the index of the current value in the uris list
+                    # If that fails, the uri is not in the list so add it to the list
+                    # If it doesn't fail the uri is being repeated so report an error
+                    try:
+                        uris.index(row[x])
+                        arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI has already been used (" + val + ")")
+                        errMsgCount = errMsgCount + 1
+                        errURI = True
+                    except:
+                        uris.append(row[x])
                             
 
             # If the length of the value in the current cell is longer than 255 characters
