@@ -105,7 +105,6 @@ def ReadSchema(schemaFile):
     schemaUrl = schemasList[schemaFile]
     schema = urllib2.urlopen(schemaUrl).read()    
     dom = parseString(schema)
-#     dom = parse(schemaFile)
     
     schemaFields = []
     schemaTypes = []
@@ -128,7 +127,6 @@ def ReadSchema(schemaFile):
         schemaReq.pop(0)
         i = i + 1
     del i
-    
     
     # Remove the OBJECTID field
     schemaFields.pop(0)
@@ -182,30 +180,25 @@ def GetExcelFile(inExcel, sheetName):
         sht = wb.sheet_by_index(0)
         return sht
 
-# Validate the Excel file against specified requirements
-def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
-    arcpy.AddMessage('Reading Excel file ...')
+# Check that the excel fields match the schema fields
+def CheckFields(excelFields, schemaFields):
+    arcpy.AddMessage("Validating Excel fields against the schema fields ...")
+        
+    # Check that all the field names are in UTF-8 then strip whitespace and carriage returns
+    for i in range(len(excelFields)):
+        if isinstance(excelFields[i], unicode):
+            try:
+                excelFields[i] = excelFields[i].encode('UTF-8')
+            except:
+                arcpy.AddMessage("  Found an unrecognized character in column #" + i + " of the field names.")
+                raise Exception ("Data not in UTF-8. Validation Failed")
+            excelFields[i] = excelFields[i].replace(" ","")
+            excelFields[i] = excelFields[i].replace("\n","")   
+    del i
     
-    values = []
-    # Get the first row of the Excel file to use as the fieldnames
-    excelFields = sht.row_values(0)
-
-    # Check that all characters are UTF-8
-    # Strip whitespace and carriage returns from excelFields because the fields
-    # in some content models have an extra whitespace on the end of the field name
-    # We need to remove this or the field won't match the schema fields
-    for i, eF in enumerate(excelFields):
-        try:
-            excelFields[i] = eF.encode('UTF-8')
-        except:
-            arcpy.AddMessage("  Found an unrecognized character in column #" + i + " of the field names.")
-            raise Exception ("Field Name Failure.")  
-        excelFields[i] = excelFields[i].replace(" ","")
-        excelFields[i] = excelFields[i].replace("\n","")    
-    del i, eF
-    
-    arcpy.AddMessage("Validating Excel file fields against the schema ...")
+    # Variable to store whether an error has been found with the fields or not
     excep = False
+    
     # Check if the Excel file has the name number of fields as the schema
     if (len(excelFields) != len(schemaFields)):
         arcpy.AddMessage("  Different number of fields.")
@@ -213,8 +206,13 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
         arcpy.AddMessage("  " + str(len(schemaFields)) + " fields in the schema.")
         excep = True
 
+    # Variable to store the name of the primary URI field whose items must be unique 
+    primaryURIField = None
+
     # Check if the Excel file has the same exact fields in the same order as the schema
     for eF, sF in map(None, excelFields, schemaFields):
+        if "URI" in sF and primaryURIField == None:
+            primaryURIField = sF
         if (excep == True) and (eF == sF):
             arcpy.AddMessage("  " + str(eF) + " == " + str(sF))
         if (eF != sF):
@@ -222,276 +220,283 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
             excep = True
     del eF, sF
     
+    # If an error with the Excel fields has been found raise and Exception
     if (excep == True):
-        raise Exception ("Schema Mismatch")
+        raise Exception ("Schema Mismatch Error. Validation Failed")
+    # Otherwise continue
     else:
-        arcpy.AddMessage("Field Name Validation Successful.")
-    del excep
+        arcpy.AddMessage("Field Validation Successful.")
+        
+    del excep   
+    return primaryURIField
 
-    # Create a boolean list to for whether any row in the field contains a value
+# If the data type is supposed to be Text
+def CheckTypeText(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
+
+    # If the value is not empty
+    if val != "":
+        # Make sure the value can be represented as a string
+        try:
+            val = str(val)
+        # If the value can't be represented as a string
+        except:
+            # If the field is required change the value to Missing
+            if req != "0":
+                if warnMsgCount <= maxWarnMsg:
+                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Changing \'" + val + "\' to \'Missing.\'")
+                    warnMsgCount = warnMsgCount + 1
+                val = "Missing"
+            # If the field is not required change the value to the empty string
+            else:
+                if warnMsgCount <= maxWarnMsg:
+                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Field not required. Deleting \'" + val + ".\'")
+                    warnMsgCount = warnMsgCount + 1
+                val = ""
+    # If the value is empty
+    else:
+        # If the field is required change the value to Missing 
+        if req != "0":
+            val = "Missing"
+    return val, warnMsgCount 
+                
+# If the data type is supposed to be Double 
+def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):           
+
+    # If the value is not empty
+    if val != "":
+        # Make sure the value can be represented as a float
+        try:
+            val = float(val)
+        # If the value can't be represented as a float
+        except:
+            # If the field is required change the value to -9999
+            if req != "0":
+                if warnMsgCount <= maxWarnMsg:
+                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Double. Changing \'" + val + "\' to \'-9999.\'")
+                    warnMsgCount = warnMsgCount + 1
+                val = "-9999"
+            # If the field is not required change the value to the empty string
+            else:
+                if warnMsgCount <= maxWarnMsg:
+                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Field not required. Deleting \'" + val + ".\'")
+                    warnMsgCount = warnMsgCount + 1
+                val = ""
+    # If the value is empty
+    else:
+        # If the field is required change the value to -9999 
+        if req != "0":
+            val = "-9999"
+    return val, warnMsgCount 
+                
+# If the data type is supposed to be Date 
+def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg): 
+
+    # If the value is not empty
+    if val != "":
+        # Make sure the value can be represented as a date
+        # Try to convert strings or unicode text to a date
+        if isinstance(val, str) or isinstance(val, unicode):
+            try:                   
+                val = datetime.datetime.strptime(val, "%Y-%m-%dT%H:%M:%S")
+            except:
+                try:
+                    val = datetime.datetime.strptime(val, "%Y-%m-%dT%H:%M")  
+                except:
+                    try:
+                        val = datetime.datetime.strptime(val, "%m/%d/%YT%H:%M:%S")
+                    except:
+                        try:
+                            val = datetime.datetime.strptime(val, "%m/%d/%YT%H:%M")
+                        # If the value can't be converted
+                        except:
+                            # If the field is required change the value to 1/1/1900T00:00  
+                            if (req != "0"):                                
+                                arcpy.AddMessage("  " + field + ", row " + rowNum + ": Not recognized as a date (" + val + ")")
+                                raise Exception ("Date Error. Validation Failed.")
+                            # Otherwise change the value to the empty string
+                            else:
+                                if warnMsgCount <= maxWarnMsg:
+                                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
+                                    warnMsgCount = warnMsgCount + 1
+                                val = ""                               
+        # If the cell value is not a string or unicode
+        else:
+            # Try to see if it is a timestamp and convert it
+            try:
+                val = datetime.datetime.fromtimestamp(val)
+            # If the value can't be converted to a date
+            except:
+                # If the field is required change the value to 1/1/1900T00:00  
+                if (req != "0"):                                
+                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Not recognized as a date (" + val + ")")
+                    raise Exception ("Date Error. Validation Failed.")
+                else:
+                    # Otherwise change the value to the empty string
+                    if warnMsgCount <= maxWarnMsg:
+                        arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
+                        warnMsgCount = warnMsgCount + 1
+                    val = ""
+    # If the value is empty
+    else:
+        # If the field is required change the value to 1/1/1900T00:00
+        if req != "0":
+            val = datetime.datetime.strptime("1/1/1900T00:00", "%m/%d/%YT%H:%M")
+    
+    return val, warnMsgCount 
+
+# Check the URIs
+def CheckURIs(val, field, row, uris, primaryURIField):
+
+    val = val.replace(" ","")
+    val = val.replace("\n","")
+    # If the value is not blank or the word Missing
+    if val != "" and val !="Missing":
+        # If the value does not start with "http://resources.usgin.org/uri-gin/"
+        if val.find("http://resources.usgin.org/uri-gin/") != 0:
+            arcpy.AddMessage("  " + field + ", row " + row + ": URI needs to start with \'http://resources.usgin.org/uri-gin/\' (" + val + ")")
+            raise Exception ("URI Error. Validation Failed.")
+        # If the last character is not a backslash add one
+        if val[len(val)-1] != "/":
+            val = val + "/"
+        # If the URI has less than 7 backslashes it does not have enough parts
+        if val.count("/") < 7:
+            arcpy.AddMessage("  " + field + ", row " + row + ": URI field does not have enough components.")
+            raise Exception ("URI Error. Validation Failed.")
+        # If the current field is the primary URI field there can be no duplicates        
+        if field == primaryURIField:
+            # If the current URI is already in the list of URIs there is an error
+            if val in uris:
+                arcpy.AddMessage("  " + field + ", row " + row + ": URI has already been used (" + val + ")")
+                raise Exception ("URI Error. Validation Failed.")
+            # If the current URI is not in the list of URIs add it
+            else:
+                uris.append(val)
+                
+    return val, uris
+
+# Check the spatial reference - If no SRS column, assume the projection is WGS84
+def CheckSRS(val, field, row, srs):
+
+    # If the SRS column indicates WGS84 aka EPSG:4326
+    if "4326" in val or "84" in val:
+        val = "WGS84"
+        if row == 1: 
+            srs = "WGS84"
+        elif srs != "WGS84":   
+            srs = "Mismatch"
+    # If the SRS column indicates NAD83 aka EPSG:4269
+    elif "4269" in val or "83" in val:
+        val = "NAD83"
+        if row == 1:
+            srs = "NAD83"
+        elif srs != "NAD83":
+            srs = "Mismatch"   
+    # If the SRS column indicates NAD27 aka EPSG:4267       
+    elif "4267" in val or "27" in val:
+        val = "NAD27"
+        if row == 1:
+            srs = "NAD27"
+        elif srs != "NAD27":
+            srs = "Mismatch"
+    else:
+        if row == 1:
+            srs = "Unknown"
+        elif srs != "Unkown":
+            srs = "Mismatch"
+        
+    if srs == "Mismatch":
+        arcpy.AddMessage("  " + field + ", row " + str(row+1) + ": Indicates a different coordinate system than previous row. Make SRS field values consistent.")
+        raise Exception ("SRS Error. Validation Failed.")
+        
+    return val, srs
+
+# Validate the Excel file against specified requirements
+def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
+    arcpy.AddMessage('Reading Excel file ...')
+    
+    # List of new rows
+    newRows = []
+    
+    # Get the values for the first row of the Excel sheet
+    excelFields = sht.row_values(0)
+    # Check the excel fields against the schema fields
+    primaryURIField = CheckFields(sht.row_values(0), schemaFields)
+
+    # Create a boolean list for whether any row in the field contains a value
     # longer than 255 characters - Set to false initially 
     longFields = []
     for i in range(len(excelFields)):
         longFields.append(False)
     del i
-    
-#     errMessages = ["URI fields need to have http://resources.usgin.org/uri-gin/ in the URI", 
-#                    "URI fields not in the correct format",
-#                    "Reference System Incorrect"]   
-#     errs = [False, False, False, False, False]
 
-    errURI = False
+    # Variable to store list of URIs in the primary URI field 
+    uris = []
     
-    errMsgCount = 0
-    maxErrMsg = 30
+    # Warning message counts
     warnMsgCount = 0
     maxWarnMsg = 20
     
-    uris = []
+    # Default spatial reference system
     srs = "WGS84"
-    
-#     # Create a list of special characters
-#     specialChars = {"δ": "delta", "°": "degree", "μ": "mu", "*": ""}
-    
-    # get all rows after the first one (was already read as the field names)
+
     arcpy.AddMessage("Validating Excel file data ...")
+    # Loop through each row of the Excel file starting with the 2nd row (1st row was already read as the field names)
     for i in range(1, sht.nrows):
+        # Get the current row
         row = sht.row_values(i)
         
         # Loop through each cell in the current row
         for x in range(0, sht.ncols):
-
-            # Only show a given number of error messages and then quit
-            if errMsgCount == maxErrMsg:
-                arcpy.AddMessage("Fix some of the errors and then run again.")
-                raise Exception ("Too Many Errors.")
             
             # Only show a given number of warning messages that are not errors
             if warnMsgCount == maxWarnMsg:
                 arcpy.AddMessage("Not showing anymore messages that are not errors.")
                 warnMsgCount = warnMsgCount + 1
-            
-#             print row[x]
-            # Get the value of the current cell
-            val = (sht.cell(i,x).value)
-            
+
             # Convert unicode to UTF-8 encoding
-            if isinstance(val, unicode):
+            if isinstance(row[x], unicode):
                 try:
-                    val = val.encode('UTF-8')
-                    row[x] = val
+                    row[x] = row[x].encode('UTF-8')
                 except:
-                    arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character.")
-                    raise Exception ("Conversion Failed.")   
+                    arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in + \'"+ row[x] + ".")
+                    raise Exception ("Data not in UTF-8. Validation Failed.")   
+                # Remove leading and trailing whitespace
+                row[x] = row[x].lstrip()
+                row[x] = row[x].rstrip()
 
-            # Search for and replace special characters
-#             if isinstance(val, str):
-#                 for c in specialChars.keys():
-#                     if val.find(c) != -1:
-#                         arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found a special character. Changing \'" + c + "\' to \'" + specialChars[c] + ".\'")
-#                         warnMsgCount = warnMsgCount + 1
-#                         val = val.replace(c, specialChars[c])
-#                         row[x] = val 
+            # If the value is "nil:missing" change it to "Missing"
+            if row[x] == "nil:missing":
+                row[x] = "Missing"
 
-            #print schemaFields[x] + ": " + val
-            #print type(val)
-
-            # Check that the URI fields have the required beginning and end
+            # Check data type of the value
+            if schemaTypes[x] == "Text":
+                row[x], warnMsgCount = CheckTypeText(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg)
+            elif schemaTypes[x] == "Double":
+                row[x], warnMsgCount = CheckTypeDouble(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg)
+            elif schemaTypes[x] == "Date":
+                row[x], warnMsgCount = CheckTypeDate(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg)
+            else:
+                arcpy.AddMessage("  " + schemaFields[x] + " does not indicate a Text, Double or Date type in the schema.")
+                raise Exception ("Type Error. Validation Failed.")   
+            
+            # If the field name indicates a URI field check the URIs
             if "URI" in schemaFields[x]:
-                val = val.replace(" ","")
-                val = val.replace("\n","")
-                row[x] = val
-                if val == "nil:missing":
-                    val = "Missing"
-                    row[x] = "Missing"
-                if val != "" and val !="Missing":
-                    if val.find("http://resources.usgin.org/uri-gin/") != 0:
-                        arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI needs to start with \'http://resources.usgin.org/uri-gin/\' (" + val + ")")
-                        errMsgCount = errMsgCount + 1
-                        errURI = True
-                    if errURI == False:
-                        if val[len(val)-1] != "/":
-#                             if warnMsgCount <= maxWarnMsg:                            
-#                                 arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI fields need to end with a '\/.\' Adding a '\/.\'")
-#                                 warnMsgCount = warnMsgCount + 1
-                            val = val + "/"
-                            row[x] = row[x] + "/"
-                        if val.count("/") < 7:
-                            arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI field does not have enough components.")
-                            errMsgCount = errMsgCount + 1
-                            errURI = True
-                    # Try to get the index of the current value in the uris list
-                    # If that fails, the uri is not in the list so add it to the list
-                    # If it doesn't fail the uri is being repeated so report an error
-                    try:
-                        uris.index(row[x])
-                        arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1)+ ": URI has already been used (" + val + ")")
-                        errMsgCount = errMsgCount + 1
-                        errURI = True
-                    except:
-                        uris.append(row[x])
-                            
+                row[x], uris, = CheckURIs(row[x], schemaFields[x], str(i+1), uris, primaryURIField)                            
 
             # If the length of the value in the current cell is longer than 255 characters
             # put the value True in the longFields list for that field        
-            if len(str(val)) > 255:
-                longFields[x] = True 
-#                 if warnMsgCount <= maxWarnMsg:
-#                     arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Contains more than 255 characters (" + val + ")")
-#                     warnMsgCount = warnMsgCount + 1   
-                
-            # Check the spatial reference - If no SRS column, assume the projection is WGS84
+            if len(str(row[x])) > 255:
+                longFields[x] = True                
+
+            # If the field name indicates SRS field check the SRS
             if "SRS" in schemaFields[x]:
-                v = val.replace(" ","")
-                v = v.replace(":","")
-                v = v.replace("-","")     
-                if v == "EPSG4326" or v == "4326" or v == "WGS84" or v == "WGS1984":
-                    if i == 1: 
-                        srs = "WGS84"
-                    elif srs != "WGS84":   
-                        srs = "Mismatch"
-                elif v == "EPSG4269" or v == "4269" or v == "NAD83" or v == "NAD1983":
-                    if i == 1:
-                        srs = "NAD83"
-                    elif srs != "NAD83":
-                        srs = "Mismatch"   
-                elif v == "EPSG4267" or v == "4267" or v == "NAD27" or v == "NAD1927":
-                    if i == 1:
-                        srs = "NAD27"
-                    elif srs != "NAD27":
-                        srs = "Mismatch"
-                else:
-                    if i == 1:
-                        srs = "Unknown"
-                    elif srs != "Unkown":
-                        srs = "Mismatch"
-#                     if warnMsgCount <= maxWarnMsg:
-#                         arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": WGS 84 spatial reference system not indicated (" + val + ")")
-#                         warnMsgCount = warnMsgCount + 1
-#                     errMsgCount = errMsgCount + 1
-#                     errs[2] = True
-                
-            if srs == "Mismatch":
-                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Indicates a different coordinate system than previous row. Make SRS field values consistent.")
-                raise Exception ("Validation Failed.")  
-            
-            # If the cell value is empty
-            if (val == ""):
-                # If the field is required change the value to a placeholder value 
-                if (schemaReq[x] != "0"):
-                    if (schemaTypes[x] == "Text"):
-                        if warnMsgCount <= maxWarnMsg:
-                            arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Required Text field empty. Changing to \'Missing.\'")
-                            warnMsgCount = warnMsgCount + 1
-                        row[x] = "Missing"
-                    elif (schemaTypes[x] == "Double"):
-                        if warnMsgCount <= maxWarnMsg:
-                            arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Required Double field empty. Changing to \'-9999.\'")
-                            warnMsgCount = warnMsgCount + 1
-                        row[x] = float("-9999")
-                    elif (schemaTypes[x] == "Date"):
-                        if warnMsgCount <= maxWarnMsg:
-                            arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Required Date field empty. Changing to \'1/1/1900T00:00.\'")
-                            warnMsgCount = warnMsgCount + 1
-                        row[x] = datetime.datetime.strptime("1/1/1900T00:00", "%m/%d/%YT%H:%M")
-                # If the field is not required change the value to None
-                else:
-                    row[x] = None
-            # If cell value is not empty check the data type
-            else:
-                # If the data type is supposed to be Text
-                if (schemaTypes[x] == "Text"):
-                    # Make sure the cell value is text
-                    try:
-                        val
-                    # If the value of the cell is not text
-                    except:
-                        # If the field is required change the value to a placeholder value
-                        if (schemaReq[x] != "0"):
-                            if warnMsgCount <= maxWarnMsg:
-                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Text. Changing \'" + val + "\' to \'Missing.\'")
-                                warnMsgCount = warnMsgCount + 1
-                            row[x] = "Missing"
-                        # Otherwise change the value to None
-                        else:
-                            if warnMsgCount <= maxWarnMsg:
-                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Text. Field not required. Changing \'" + val + "\' to Null.")
-                                warnMsgCount = warnMsgCount + 1
-                            row[x] = None
-                # If the data type is supposed to be Double
-                elif (schemaTypes[x] == "Double"):
-                    # Try to cast the data as a float
-                    try:
-                        float(val)
-                    # If the value can't be cast as a float
-                    except:
-                        # If the field is required change the value to a placeholder value 
-                        if (schemaReq[x] != "0"):
-                            if warnMsgCount <= maxWarnMsg:
-                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Double. Changing \'" + val + "\' to \'-9999.\'")
-                                warnMsgCount = warnMsgCount + 1
-                            row[x] = "-9999"
-                        # Otherwise change the value to None
-                        else:
-                            if warnMsgCount <= maxWarnMsg:
-                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Double. Field not required. Changing \'" + val + "\' to Null.")
-                                warnMsgCount = warnMsgCount + 1
-                            row[x] = None
-                # If the data type is supposed to be Double     
-                elif (schemaTypes[x] == "Date"):
-                    # Try to convert strings or unicode text to a date
-                    if isinstance(val, str) or isinstance(val, unicode):
-                        try:                   
-                            date = datetime.datetime.strptime(row[x], "%Y-%m-%dT%H:%M:%S")
-                        except:
-                            try:
-                                date = datetime.datetime.strptime(row[x], "%Y-%m-%dT%H:%M")  
-                            except:
-                                try:
-                                    date = datetime.datetime.strptime(row[x], "%m/%d/%YT%H:%M:%S")
-                                except:
-                                    try:
-                                        date = datetime.datetime.strptime(row[x], "%m/%d/%YT%H:%M")
-                                    # If the value can't be converted
-                                    except:
-                                        # If the field is required change the value to a placeholder value  
-                                        if (schemaReq[x] != "0"):                                
-                                            arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Not recognized as a date (" + val + ")")
-                                            raise Exception ("Validation Failed.")
-                                        # Otherwise change the value to None
-                                        else:
-                                            if warnMsgCount <= maxWarnMsg:
-                                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Date. Field not required. Changing \'" + val + "\' to Null.")
-                                                warnMsgCount = warnMsgCount + 1
-                                            row[x] = None                                
-                    # If the cell value is not a string or unicode
-                    else:
-                        # Try to see if it is a timestamp and convert it
-                        try:
-                            date = datetime.datetime.fromtimestamp(row[x])
-                        # If the value can't be converted to a date
-                        except:
-                            # If the field is required change the value to a placeholder value  
-                            if (schemaReq[x] != "0"):                                
-                                arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Not recognized as a date (" + val + ")")
-                                raise Exception ("Validation Failed.")
-                            else:
-                                # Otherwise change the value to None
-                                if warnMsgCount <= maxWarnMsg:
-                                    arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Type should be Date. Field not required. Changing \'" + val + "\' to Null.")
-                                    warnMsgCount = warnMsgCount + 1
-                                row[x] = None
-                    # Set the value in the list of items in the row to date
-                    row[x] = date
-       
-        # Append the row to the list of rows
-        values.append(row)
-    
-    if errURI == True:
-        raise Exception ("Validation Failed.") 
+                row[x], srs = CheckSRS(row[x], schemaFields[x], i, srs) 
+
+        # Append the row to the list of new rows
+        newRows.append(row)
     
     arcpy.AddMessage("Validation Successful.")             
-    return values, longFields, srs
+    return newRows, longFields, srs
 
 # Create the personal Geodatabase (Access DB)
 def CreateGeodatabase(outPath, outName):
@@ -617,7 +622,7 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
                     row.LatDegreeWGS84 = row.POINT_Y
                     row.LongDegreeWGS84 = row.POINT_X
                 except:
-                    raise Exception ("Unable to find Lat & Long columns Failure.")
+                    raise Exception ("Unable to find Lat & Long columns. Conversion Failed.")
             row.SRS = "WGS 84"
             rows.updateRow(row)
             
