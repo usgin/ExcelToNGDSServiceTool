@@ -57,7 +57,15 @@ def main(argv=None):
             CreateXYEventLayer(tempTable, layerName, srs)
             CreateFeatureClass(layerName, outGeoDB, srs)
             
-            arcpy.Delete_management(tempTable)
+            # Make sure the final feature class has the same number of rows as the orignial table
+            rowsTemp = int(arcpy.GetCount_management(tempTable).getOutput(0))
+            rowsFinal = int(arcpy.GetCount_management(outGeoDB + "\\" + layerName).getOutput(0))
+            if rowsTemp != rowsFinal:
+                arcpy.AddMessage("Error! " + str(rowsTemp - rowsFinal) + " rows were deleted when converting the table to the feature class.")
+                arcpy.AddMessage("Check the Lat & Long values for errors.")
+                raise Exception ("Conversion Failed.")
+            else:
+                arcpy.Delete_management(tempTable)
             
             # Deal with services that have multiple layers
             if len(layerNames) > 1:
@@ -235,6 +243,12 @@ def CheckTypeText(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
 
     # If the value is not empty
     if val != "":
+        
+        # Remove demical and trailing zeros that were added on Excel import
+        if isinstance(val, float):
+            if val == int(val):
+                val = '%d'%val
+                        
         # Make sure the value can be represented as a string
         try:
             val = str(val)
@@ -280,12 +294,15 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                 if warnMsgCount <= maxWarnMsg:
                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Field not required. Deleting \'" + val + ".\'")
                     warnMsgCount = warnMsgCount + 1
-                val = ""
+                val = None
     # If the value is empty
     else:
         # If the field is required change the value to -9999 
         if req != "0":
             val = "-9999"
+        else:
+            val = None
+            
     return val, warnMsgCount 
                 
 # If the data type is supposed to be Date 
@@ -318,7 +335,7 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                                 if warnMsgCount <= maxWarnMsg:
                                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
                                     warnMsgCount = warnMsgCount + 1
-                                val = ""                               
+                                val = None                               
         # If the cell value is not a string or unicode
         else:
             # Try to see if it is a timestamp and convert it
@@ -335,13 +352,15 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                     if warnMsgCount <= maxWarnMsg:
                         arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
                         warnMsgCount = warnMsgCount + 1
-                    val = ""
+                    val = None
     # If the value is empty
     else:
         # If the field is required change the value to 1/1/1900T00:00
         if req != "0":
             val = datetime.datetime.strptime("1/1/1900T00:00", "%m/%d/%YT%H:%M")
-    
+        else:
+            val = None
+            
     return val, warnMsgCount 
 
 # Check the URIs
@@ -379,21 +398,21 @@ def CheckSRS(val, field, row, srs):
 
     # If the SRS column indicates WGS84 aka EPSG:4326
     if "4326" in val or "84" in val:
-        val = "WGS84"
+        val = "EPSG:4326"
         if row == 1: 
             srs = "WGS84"
         elif srs != "WGS84":   
             srs = "Mismatch"
     # If the SRS column indicates NAD83 aka EPSG:4269
     elif "4269" in val or "83" in val:
-        val = "NAD83"
+        val = "EPSG:4269"
         if row == 1:
             srs = "NAD83"
         elif srs != "NAD83":
             srs = "Mismatch"   
     # If the SRS column indicates NAD27 aka EPSG:4267       
     elif "4267" in val or "27" in val:
-        val = "NAD27"
+        val = "EPSG:4267"
         if row == 1:
             srs = "NAD27"
         elif srs != "NAD27":
@@ -526,13 +545,13 @@ def MakeTable(outTable, longFields, schemaFields, schemaTypes):
 def InsertData(outTable, data, schemaFields):
     arcpy.AddMessage("Inserting Rows ...")
  
-    # if running on 10.1, use da insert cursor
+    # If running on 10.1, use da insert cursor
     if arcpy.GetInstallInfo()['Version'] == '10.1':
         insertCur = arcpy.da.InsertCursor(outTable, schemaFields)
         for row in data:
             insertCur.insertRow(row)
 
-    # otherwise use original insert cursor
+    # Otherwise use original insert cursor
     else:
         insertCur = arcpy.InsertCursor(outTable)
         for d in data:
@@ -623,7 +642,7 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
                     row.LongDegreeWGS84 = row.POINT_X
                 except:
                     raise Exception ("Unable to find Lat & Long columns. Conversion Failed.")
-            row.SRS = "WGS 84"
+            row.SRS = "EPSG:4326"
             rows.updateRow(row)
             
         # Delete cursor and row objects to remove locks on the data 
