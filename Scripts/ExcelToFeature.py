@@ -61,7 +61,11 @@ def main(argv=None):
             rowsTemp = int(arcpy.GetCount_management(tempTable).getOutput(0))
             rowsFinal = int(arcpy.GetCount_management(outGeoDB + "\\" + layerName).getOutput(0))
             if rowsTemp != rowsFinal:
-                arcpy.AddMessage("Error! " + str(rowsTemp - rowsFinal) + " rows were deleted when converting the table to the feature class.")
+                rowsDeleted = rowsTemp - rowsFinal
+                if rowsDeleted == 1:
+                    arcpy.AddMessage("Error! " + str(rowsDeleted) + " row was deleted when converting the table to the feature class.")
+                else:
+                    arcpy.AddMessage("Error! " + str(rowsDeleted) + " rows were deleted when converting the table to the feature class.")
                 arcpy.AddMessage("Check the Lat & Long values for errors.")
                 raise Exception ("Conversion Failed.")
             else:
@@ -75,7 +79,7 @@ def main(argv=None):
                 arcpy.Delete_management(outGeoDB + "\\AllLayersTemp")
                       
                 arcpy.AddMessage("Warning! This is a service with multiple layers. All layers will be created having the same fields.") 
-                arcpy.AddMessage("Delete any layers not being used and for each layer use the schema to delete the fields that do not belong.")
+                arcpy.AddMessage("Delete any layers not being used and for each layer use the schema to delete the fields that do not belong.")    
             
             arcpy.AddMessage("Conversion Successful!")
        
@@ -210,8 +214,8 @@ def CheckFields(excelFields, schemaFields):
     # Check if the Excel file has the name number of fields as the schema
     if (len(excelFields) != len(schemaFields)):
         arcpy.AddMessage("  Different number of fields.")
-        arcpy.AddMessage("  " + str(len(excelFields)) + " fields in the Excel file.")
-        arcpy.AddMessage("  " + str(len(schemaFields)) + " fields in the schema.")
+        arcpy.AddMessage("  " + str(len(excelFields)) + " fields in the Excel file (fields on the left below).")
+        arcpy.AddMessage("  " + str(len(schemaFields)) + " fields in the schema (fields on the right below).")
         excep = True
 
     # Variable to store the name of the primary URI field whose items must be unique 
@@ -219,7 +223,7 @@ def CheckFields(excelFields, schemaFields):
 
     # Check if the Excel file has the same exact fields in the same order as the schema
     for eF, sF in map(None, excelFields, schemaFields):
-        if "URI" in sF and primaryURIField == None:
+        if sF != None and "URI" in sF and primaryURIField == None:
             primaryURIField = sF
         if (excep == True) and (eF == sF):
             arcpy.AddMessage("  " + str(eF) + " == " + str(sF))
@@ -238,7 +242,7 @@ def CheckFields(excelFields, schemaFields):
     del excep   
     return primaryURIField
 
-# If the data type is supposed to be Text
+# Perform validataion checks for values whose data type is supposed to be Text
 def CheckTypeText(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
 
     # If the value is not empty
@@ -273,7 +277,7 @@ def CheckTypeText(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
             val = "Missing"
     return val, warnMsgCount 
                 
-# If the data type is supposed to be Double 
+# Perform validataion checks for values whose data type is supposed to be Double 
 def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):           
 
     # If the value is not empty
@@ -305,7 +309,7 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
             
     return val, warnMsgCount 
                 
-# If the data type is supposed to be Date 
+# Perform validataion checks for values whose data type is supposed to be Date 
 def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg): 
 
     # If the value is not empty
@@ -368,6 +372,7 @@ def CheckURIs(val, field, row, uris, primaryURIField):
 
     val = val.replace(" ","")
     val = val.replace("\n","")
+    
     # If the value is not blank or the word Missing
     if val != "" and val !="Missing":
         # If the value does not start with "http://resources.usgin.org/uri-gin/"
@@ -589,7 +594,7 @@ def CreateXYEventLayer(table, layerName, srs):
             arcpy.AddMessage("Unable to determine Lat and Long fields.")
             raise Exception ("Conversion Failed.")
         
-    arcpy.AddMessage("Finished Coverting Table.")
+    arcpy.AddMessage("Finished Converting Table.")
     return
 
 # Create the Feature Class in ArcGIS & reproject if SRS doesn't indicate WGS84
@@ -615,18 +620,18 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
         inCS = os.path.join(install_dir, spRef)
         outCS = os.path.join(install_dir, r"Coordinate Systems\Geographic Coordinate Systems\World\WGS 1984.prj")
         
-        arcpy.AddMessage("Reprojecting from " + srs + " to WGS84 ....")
-        arcpy.AddMessage("If data indicates Hawaii or Alaska double-check reprojection. May need to use a different transformation.")
+        arcpy.AddMessage("Reprojecting from " + srs + " to WGS84 using the transformation " + trans + "....")
+        arcpy.AddMessage("Warning! If the data indicates a region other than the continental US you may need to use a different transformation.")
         
-        # Reproject the feature class to WGS 84 and saving in a temporary feature class 
+        # Reproject the feature class to WGS 84 and save in a temporary feature class 
         outFeatureClassTemp = outGeoDB + "\\" + layerName + "Temp"
         arcpy.Project_management(outFeatureClass, outFeatureClassTemp, outCS, trans, inCS)
         
-        # Delete the original feature class and rename the temporary feature class as the original
+        # Delete the original feature class and rename the temporary feature class the same as the original
         arcpy.Delete_management(outFeatureClass)
         arcpy.Rename_management(outFeatureClassTemp, outFeatureClass)
 
-        # Calculate XY coordinates to the feature class        
+        # Calculate XY coordinates for the points in the feature class        
         arcpy.AddXY_management(outFeatureClass)
         
         # Replace the value in the Lat & Long fields with the calculated XY coordinates
@@ -650,7 +655,7 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
         
         arcpy.DeleteField_management(outFeatureClass, ["POINT_Y", "POINT_X"])
         arcpy.AddMessage("Finished Reprojecting.")
-    
+
     arcpy.AddMessage("Finished Creating Feature Class.")
     return
 
