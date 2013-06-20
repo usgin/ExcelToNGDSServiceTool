@@ -344,7 +344,8 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
         else:
             # Try to see if it is a timestamp and convert it
             try:
-                val = datetime.datetime.fromtimestamp(val)
+                val = xlrd.xldate_as_tuple(val, 0)
+                val = datetime.datetime(val[0], val[1], val[2], val[3], val[4], val[5])
             # If the value can't be converted to a date
             except:
                 # If the field is required change the value to 1/1/1900T00:00  
