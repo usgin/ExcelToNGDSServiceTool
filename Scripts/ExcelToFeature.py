@@ -22,8 +22,8 @@ except:
 
 # Main function for the Excel to NGDS Feature ArcGIS Tool
 def main(argv=None):
-    # Allow overwrite of tables
-    arcpy.env.overwriteOutput = True
+    # Don't allow overwrite of geodatabase
+    arcpy.env.overwriteOutput = False
 
     # Get the parameters of the tool
     inExcel = arcpy.GetParameterAsText(0)
