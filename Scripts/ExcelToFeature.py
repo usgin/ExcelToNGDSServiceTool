@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 # Excel to NGDS Feature ArcGIS Tool
-# Written by Jessica Good Alisdairi at the Arizona Geological Survey, May 2013
-# This tool validates and converts a spreadsheet in an Excel file to a Feature class 
+# Written by Jessica Good Alisdairi at the Arizona Geological Survey, May-June 2013
+# This tool validates and converts a spreadsheet in an Excel file to a feature class 
 # ready to be deployed as an NDGS service.
 """
 
@@ -296,7 +296,7 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
             # If the field is not required change the value to the empty string
             else:
                 if warnMsgCount <= maxWarnMsg:
-                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Field not required. Deleting \'" + val + ".\'")
+                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Double. Field not required. Deleting \'" + val + ".\'")
                     warnMsgCount = warnMsgCount + 1
                 val = None
     # If the value is empty
@@ -491,7 +491,7 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
             # If the value is "nil:missing" change it to "Missing"
             if row[x] == "nil:missing":
                 row[x] = "Missing"
-
+            
             # Check data type of the value
             if schemaTypes[x] == "Text":
                 row[x], warnMsgCount = CheckTypeText(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg)
