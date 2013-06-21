@@ -576,16 +576,17 @@ def CreateXYEventLayer(table, layerName, srs):
     
     # Set the spatial reference
     if srs == "WGS84":
-        spRef = r"Coordinate Systems\Geographic Coordinate Systems\World\WGS 1984.prj"
+        spRef = os.path.dirname(__file__) + "\\WGS 1984.prj"
     elif srs == "NAD83":
-        spRef = r"Coordinate Systems\Geographic Coordinate Systems\North America\NAD 1983.prj"
+        spRef = os.path.dirname(__file__) + "\\NAD 1983.prj"
     elif srs == "NAD27":
-        spRef = r"Coordinate Systems\Geographic Coordinate Systems\North America\NAD 1927.prj"
+        spRef = os.path.dirname(__file__) + "\\NAD 1927.prj"
     else:
         arcpy.AddMessage("Warning!! Unable to determine spatial reference system so using WGS84. Reprojection of the feature class will be required.")
-        spRef = r"Coordinate Systems\Geographic Coordinate Systems\World\WGS 1984.prj"
+        spRef = os.path.dirname(__file__) + "\\WGS 1984.prj"
     
-    # Creat the XY Event Layer
+    
+    # Create the XY Event Layer
     try:
         arcpy.MakeXYEventLayer_management(table, "LongDegreeWGS84", "LatDegreeWGS84", layerName, spRef)
     except:
@@ -608,18 +609,16 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
 #     arcpy.FeatureClassToFeatureClass_conversion(layerName, outLocation, outFeatureClass)
 #     arcpy.FeatureClassToGeodatabase_conversion(layerName, outLocation)
     
-    if srs == "NAD27" or srs == "NAD83":
-        install_dir = arcpy.GetInstallInfo()['InstallDir']
-        
+    if srs == "NAD27" or srs == "NAD83":      
         if srs == "NAD27":
-            spRef = r"Coordinate Systems\Geographic Coordinate Systems\North America\NAD 1927.prj"
+            spRef = os.path.dirname(__file__) + "\\NAD 1927.prj"
             trans = "NAD_1927_To_WGS_1984_4"
         if srs == "NAD83":
-            spRef = r"Coordinate Systems\Geographic Coordinate Systems\North America\NAD 1983.prj"
+            spRef = os.path.dirname(__file__) + "\\NAD 1983.prj"
             trans = "NAD_1983_To_WGS_1984_1"
             
-        inCS = os.path.join(install_dir, spRef)
-        outCS = os.path.join(install_dir, r"Coordinate Systems\Geographic Coordinate Systems\World\WGS 1984.prj")
+        inCS = spRef
+        outCS = os.path.dirname(__file__) + "\\WGS 1984.prj"
         
         arcpy.AddMessage("Reprojecting from " + srs + " to WGS84 using the transformation " + trans + "....")
         arcpy.AddMessage("Warning! If the data indicates a region other than the continental US you may need to use a different transformation.")
