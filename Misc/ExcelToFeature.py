@@ -49,17 +49,17 @@ def main(argv=None):
         if (validateOnly == "false"):
             CreateGeodatabase(path, serviceName)
             
-            outGeoDB = path + serviceName + ".mdb"         
-            tempTable = outGeoDB + "\\" + layerName + "Table"
-            
-            MakeTable(tempTable, longFields, schemaFields, schemaTypes)
-            InsertData(tempTable, data, schemaFields)
-            CreateXYEventLayer(tempTable, layerName, srs)
-            CreateFeatureClass(layerName, outGeoDB, srs)
+            arcpy.env.workspace = path + serviceName + ".mdb"
+            table = layerName + "Table"
+                        
+            MakeTable(table, longFields, schemaFields, schemaTypes)
+            InsertData(table, data, schemaFields)
+            CreateXYEventLayer(table, layerName + "Layer", srs)
+            CreateFeatureClass(layerName + "Layer", layerName, srs)
             
             # Make sure the final feature class has the same number of rows as the orignial table
-            rowsTemp = int(arcpy.GetCount_management(tempTable).getOutput(0))
-            rowsFinal = int(arcpy.GetCount_management(outGeoDB + "\\" + layerName).getOutput(0))
+            rowsTemp = int(arcpy.GetCount_management(table).getOutput(0))
+            rowsFinal = int(arcpy.GetCount_management(layerName).getOutput(0))
             if rowsTemp != rowsFinal:
                 rowsDeleted = rowsTemp - rowsFinal
                 if rowsDeleted == 1:
@@ -69,14 +69,14 @@ def main(argv=None):
                 arcpy.AddMessage("Check the Lat & Long values for errors.")
                 raise Exception ("Conversion Failed.")
             else:
-                arcpy.Delete_management(tempTable)
+                arcpy.Delete_management(table)
             
             # Deal with services that have multiple layers
             if len(layerNames) > 1:
-                for layerName in layerNames:
-                    arcpy.FeatureClassToFeatureClass_conversion(outGeoDB + "\\AllLayersTemp", outGeoDB, layerName)
-                    arcpy.AddMessage("Created Feature Class " + layerName)
-                arcpy.Delete_management(outGeoDB + "\\AllLayersTemp")
+                for layer in layerNames:
+                    arcpy.CopyFeatures_management("AllLayersTemp", layer)
+                    arcpy.AddMessage("Created Feature Class " + layer)
+                arcpy.Delete_management("AllLayersTemp")
                       
                 arcpy.AddMessage("Warning! This is a service with multiple layers. All layers will be created having the same fields.") 
                 arcpy.AddMessage("Delete any layers not being used and for each layer use the schema to delete the fields that do not belong.")    
@@ -130,10 +130,10 @@ def ReadSchema(schemaFile):
     
     # Get the index of the OBJECTID field and remove that and any fields before it
     objectIDIndex = schemaFields.index("OBJECTID")
-    layerNames = []
+    layers = []
     i = 0
     while i < objectIDIndex:
-        layerNames.append(schemaFields[0])
+        layers.append(schemaFields[0])
         schemaFields.pop(0)
         schemaTypes.pop(0)
         schemaReq.pop(0)
@@ -168,7 +168,7 @@ def ReadSchema(schemaFile):
     del i, t
      
     arcpy.AddMessage('Finished Reading Schema.')   
-    return schemaFields, schemaTypes, schemaReq, layerNames
+    return schemaFields, schemaTypes, schemaReq, layers
 
 # Get a list of sheet names for the selected Excel file
 def sheet_names(inExcel):
@@ -426,7 +426,7 @@ def CheckSRS(val, field, row, srs):
     else:
         if row == 1:
             srs = "Unknown"
-        elif srs != "Unkown":
+        elif srs != "Unknown":
             srs = "Mismatch"
         
     if srs == "Mismatch":
@@ -486,8 +486,7 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
                     arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in + \'"+ row[x] + ".")
                     raise Exception ("Data not in UTF-8. Validation Failed.")   
                 # Remove leading and trailing whitespace
-                row[x] = row[x].lstrip()
-                row[x] = row[x].rstrip()
+                row[x] = row[x].strip()
 
             # If the value is "nil:missing" change it to "Missing"
             if row[x] == "nil:missing":
@@ -524,42 +523,42 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
     return newRows, longFields, srs
 
 # Create the personal Geodatabase (Access DB)
-def CreateGeodatabase(outPath, outName):
+def CreateGeodatabase(path, name):
     arcpy.AddMessage("Creating Geodatabase ...")
-    arcpy.CreatePersonalGDB_management(outPath, outName)
+    arcpy.CreatePersonalGDB_management(path, name)
     arcpy.AddMessage("Finished Creating Geodatabase.")
     return
 
 # Create the output table, add all required fields for that table
-def MakeTable(outTable, longFields, schemaFields, schemaTypes):
+def MakeTable(table, longFields, schemaFields, schemaTypes):
     arcpy.AddMessage("Creating Table in ArcGIS ...")
-    arcpy.CreateTable_management(os.path.dirname(outTable), os.path.basename(outTable))
+    arcpy.CreateTable_management(env.workspace, table)
 
     # Add the fields to the table
     for i in range(0, len(schemaFields)):
         if (longFields[i] == True):
             arcpy.AddMessage("  " + schemaFields[i] + " contains data longer than 255 characters, adjusting max length for this field to 2,147,483,647")
-            arcpy.AddField_management(outTable, schemaFields[i], "TEXT", "", "", 2147483647)
+            arcpy.AddField_management(table, schemaFields[i], "TEXT", "", "", 2147483647)
         else:
-            arcpy.AddField_management(outTable, schemaFields[i], schemaTypes[i])
+            arcpy.AddField_management(table, schemaFields[i], schemaTypes[i])
         arcpy.AddMessage("  " + schemaFields[i] + " added with type " + schemaTypes[i])
     
     arcpy.AddMessage("Finished Creating Table.")
     return
 
 # Insert the data rows in the the table
-def InsertData(outTable, data, schemaFields):
+def InsertData(table, data, schemaFields):
     arcpy.AddMessage("Inserting Rows ...")
  
     # If running on 10.1, use da insert cursor
     if arcpy.GetInstallInfo()['Version'] == '10.1':
-        insertCur = arcpy.da.InsertCursor(outTable, schemaFields)
+        insertCur = arcpy.da.InsertCursor(table, schemaFields)
         for row in data:
             insertCur.insertRow(row)
 
     # Otherwise use original insert cursor
     else:
-        insertCur = arcpy.InsertCursor(outTable)
+        insertCur = arcpy.InsertCursor(table)
         for d in data:
             row = insertCur.newRow()
             for x in range(len(d)):
@@ -571,7 +570,7 @@ def InsertData(outTable, data, schemaFields):
     return
 
 # Convert the Table to an XY Event Layer in ArcGIS, using WGS84 as the projection    
-def CreateXYEventLayer(table, layerName, srs):
+def CreateXYEventLayer(table, layer, srs):
     arcpy.AddMessage("Converting Table to XY Event Layer ...")
     
     # Set the spatial reference
@@ -588,10 +587,10 @@ def CreateXYEventLayer(table, layerName, srs):
     
     # Create the XY Event Layer
     try:
-        arcpy.MakeXYEventLayer_management(table, "LongDegreeWGS84", "LatDegreeWGS84", layerName, spRef)
+        arcpy.MakeXYEventLayer_management(table, "LongDegreeWGS84", "LatDegreeWGS84", layer, spRef)
     except:
         try:
-            arcpy.MakeXYEventLayer_management(table, "LongDegree", "LatDegree", layerName, spRef)
+            arcpy.MakeXYEventLayer_management(table, "LongDegree", "LatDegree", layer, spRef)
         except:
             arcpy.AddMessage("Unable to determine Lat and Long fields.")
             raise Exception ("Conversion Failed.")
@@ -600,11 +599,10 @@ def CreateXYEventLayer(table, layerName, srs):
     return
 
 # Create the Feature Class in ArcGIS & reproject if SRS doesn't indicate WGS84
-def CreateFeatureClass(layerName, outGeoDB, srs):
+def CreateFeatureClass(layer, featureClass, srs):
     arcpy.AddMessage("Creating Feature Class ....")
-    
-    outFeatureClass = outGeoDB + "\\" + layerName
-    arcpy.CopyFeatures_management(layerName, outFeatureClass)
+
+    arcpy.CopyFeatures_management(layer, featureClass)
 #     arcpy.MakeFeatureLayer_management(layerName + "Table Events", outLocation + "/" + layerName)
 #     arcpy.FeatureClassToFeatureClass_conversion(layerName, outLocation, outFeatureClass)
 #     arcpy.FeatureClassToGeodatabase_conversion(layerName, outLocation)
@@ -624,19 +622,19 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
         arcpy.AddMessage("Warning! If the data indicates a region other than the continental US you may need to use a different transformation.")
         
         # Reproject the feature class to WGS 84 and save in a temporary feature class 
-        outFeatureClassTemp = outGeoDB + "\\" + layerName + "Temp"
-        arcpy.Project_management(outFeatureClass, outFeatureClassTemp, outCS, trans, inCS)
+        featureClassTemp = featureClass + "Temp"
+        arcpy.Project_management(featureClass, featureClassTemp, outCS, trans, inCS)
         
         # Delete the original feature class and rename the temporary feature class the same as the original
-        arcpy.Delete_management(outFeatureClass)
-        arcpy.Rename_management(outFeatureClassTemp, outFeatureClass)
+        arcpy.Delete_management(featureClass)
+        arcpy.Rename_management(featureClassTemp, featureClass)
 
         # Calculate XY coordinates for the points in the feature class        
-        arcpy.AddXY_management(outFeatureClass)
+        arcpy.AddXY_management(featureClass)
         
         # Replace the value in the Lat & Long fields with the calculated XY coordinates
         # Update the SRS column to WGS 84
-        rows = arcpy.UpdateCursor(outFeatureClass)
+        rows = arcpy.UpdateCursor(featureClass)
         for row in rows:
             try:
                 row.LatDegree = row.POINT_Y
@@ -653,7 +651,7 @@ def CreateFeatureClass(layerName, outGeoDB, srs):
         # Delete cursor and row objects to remove locks on the data 
         del row, rows
         
-        arcpy.DeleteField_management(outFeatureClass, ["POINT_Y", "POINT_X"])
+        arcpy.DeleteField_management(featureClass, ["POINT_Y", "POINT_X"])
         arcpy.AddMessage("Finished Reprojecting.")
 
     arcpy.AddMessage("Finished Creating Feature Class.")
