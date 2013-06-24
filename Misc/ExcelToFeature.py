@@ -583,7 +583,7 @@ def CreateXYEventLayer(table, layer, srs):
     else:
         arcpy.AddMessage("Warning!! Unable to determine spatial reference system so using WGS84. Reprojection of the feature class will be required.")
         spRef = os.path.dirname(__file__) + "\\WGS 1984.prj"
-    
+    arcpy.AddMessage("  Spatial Reference System of data is " + srs)
     
     # Create the XY Event Layer
     try:
@@ -618,8 +618,12 @@ def CreateFeatureClass(layer, featureClass, srs):
         inCS = spRef
         outCS = os.path.dirname(__file__) + "\\WGS 1984.prj"
         
-        arcpy.AddMessage("Reprojecting from " + srs + " to WGS84 using the transformation " + trans + "....")
-        arcpy.AddMessage("Warning! If the data indicates a region other than the continental US you may need to use a different transformation.")
+        # Determine if the input has a defined coordinate system, can't project it if it does not
+#        dsc = arcpy.Describe(featureClass)
+#        arcpy.AddMessage(dsc.spatialReference.Name)
+        
+        arcpy.AddMessage("  Reprojecting from " + srs + " to WGS84 using the transformation " + trans + "....")
+        arcpy.AddMessage("  Warning! If the data indicates a region other than the continental US you may need to use a different transformation.")
         
         # Reproject the feature class to WGS 84 and save in a temporary feature class 
         featureClassTemp = featureClass + "Temp"
@@ -652,7 +656,7 @@ def CreateFeatureClass(layer, featureClass, srs):
         del row, rows
         
         arcpy.DeleteField_management(featureClass, ["POINT_Y", "POINT_X"])
-        arcpy.AddMessage("Finished Reprojecting.")
+        arcpy.AddMessage("  Finished Reprojecting.")
 
     arcpy.AddMessage("Finished Creating Feature Class.")
     return
