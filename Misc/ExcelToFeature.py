@@ -38,8 +38,8 @@ def main(argv=None):
     # Run it
     try:
         schemaFields, schemaTypes, schemaReq, layerNames = ReadSchema(schemaFile)
-        sht = GetExcelFile(inExcel, sheetName)
-        data, longFields, srs = ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq)
+        sht, wb = GetExcelFile(inExcel, sheetName)
+        data, longFields, srs = ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq)
         
         if len(layerNames) > 1:
             layerName = "AllLayersTemp"
@@ -63,9 +63,9 @@ def main(argv=None):
             if rowsTemp != rowsFinal:
                 rowsDeleted = rowsTemp - rowsFinal
                 if rowsDeleted == 1:
-                    arcpy.AddMessage("Error! " + str(rowsDeleted) + " row was deleted when converting the table to the feature class.")
+                    arcpy.AddMessage("  Error! " + str(rowsDeleted) + " row was deleted when converting the table to the feature class.")
                 else:
-                    arcpy.AddMessage("Error! " + str(rowsDeleted) + " rows were deleted when converting the table to the feature class.")
+                    arcpy.AddMessage("  Error! " + str(rowsDeleted) + " rows were deleted when converting the table to the feature class.")
                 arcpy.AddMessage("Check the Lat & Long values for errors.")
                 raise Exception ("Conversion Failed.")
             else:
@@ -78,8 +78,8 @@ def main(argv=None):
                     arcpy.AddMessage("Created Feature Class " + layer)
                 arcpy.Delete_management("AllLayersTemp")
                       
-                arcpy.AddMessage("Warning! This is a service with multiple layers. All layers will be created having the same fields.") 
-                arcpy.AddMessage("Delete any layers not being used and for each layer use the schema to delete the fields that do not belong.")    
+                arcpy.AddMessage("  Warning! This is a service with multiple layers. All layers will be created having the same fields.") 
+                arcpy.AddMessage("  Delete any layers not being used and for each layer use the schema to delete the fields that do not belong.")    
             
             arcpy.AddMessage("Conversion Successful!")
        
@@ -184,13 +184,13 @@ def GetExcelFile(inExcel, sheetName):
     if sheetName.upper() != "FIRST":
         try:
             sht = wb.sheet_by_name(sheetName)
-            return sht
+            return sht, wb
         except:
             arcpy.AddError('Invalid Sheet Name')
             sys.exit()
     else:
         sht = wb.sheet_by_index(0)
-        return sht
+        return sht, wb
 
 # Check that the excel fields match the schema fields
 def CheckFields(excelFields, schemaFields):
@@ -310,7 +310,7 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
     return val, warnMsgCount 
                 
 # Perform validataion checks for values whose data type is supposed to be Date 
-def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg): 
+def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg, wb): 
 
     # If the value is not empty
     if val != "":
@@ -328,24 +328,35 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                     except:
                         try:
                             val = datetime.datetime.strptime(val, "%m/%d/%YT%H:%M")
-                        # If the value can't be converted
                         except:
-                            # If the field is required change the value to 1/1/1900T00:00  
-                            if (req != "0"):                                
-                                arcpy.AddMessage("  " + field + ", row " + rowNum + ": Not recognized as a date (" + val + ")")
-                                raise Exception ("Date Error. Validation Failed.")
-                            # Otherwise change the value to the empty string
-                            else:
-                                if warnMsgCount <= maxWarnMsg:
-                                    arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
-                                    warnMsgCount = warnMsgCount + 1
-                                val = None                               
+                            try:
+                                val = datetime.datetime.strptime(val, "%Y-%m-%d")
+                            except:
+                                try:
+                                    val = datetime.datetime.strptime(val, "%m/%d/%Y")
+                                # If the value can't be converted
+                                except:
+                                    # If the field is required change the value to 1/1/1900T00:00  
+                                    if (req != "0"):                                
+                                        arcpy.AddMessage("  " + field + ", row " + rowNum + ": Not recognized as a date (" + val + ")")
+                                        raise Exception ("Date Error. Validation Failed.")
+                                    # Otherwise change the value to the empty string
+                                    else:
+                                        if warnMsgCount <= maxWarnMsg:
+                                            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
+                                            warnMsgCount = warnMsgCount + 1
+                                        val = None                               
         # If the cell value is not a string or unicode
         else:
             # Try to see if it is a timestamp and convert it
             try:
-                val = xlrd.xldate_as_tuple(val, 0)
-                val = datetime.datetime(val[0], val[1], val[2], val[3], val[4], val[5])
+                if val >= 61:
+                    year, month, day, hour, minute, second = xlrd.xldate_as_tuple(val, wb.datemode)
+                    val = datetime.datetime(year, month, day, hour, minute, second)
+                # Excel treats the first 60 days of 1900 as ambiguous (see Microsoft documentation)
+                # Assume the dates are what is indicated in the cell
+                else:
+                    val = datetime.datetime(1900, 1, 1, 0, 0, 0) + datetime.timedelta(days = val - 1)
             # If the value can't be converted to a date
             except:
                 # If the field is required change the value to 1/1/1900T00:00  
@@ -360,9 +371,9 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                     val = None
     # If the value is empty
     else:
-        # If the field is required change the value to 1/1/1900T00:00
+        # If the field is required change the value to 1/1/1900T00:00:00
         if req != "0":
-            val = datetime.datetime.strptime("1/1/1900T00:00", "%m/%d/%YT%H:%M")
+            val = datetime.datetime(1900, 1, 1, 0, 0, 0)
         else:
             val = None
             
@@ -424,19 +435,20 @@ def CheckSRS(val, field, row, srs):
         elif srs != "NAD27":
             srs = "Mismatch"
     else:
+        val = "EPSG:4326"
         if row == 1:
             srs = "Unknown"
         elif srs != "Unknown":
             srs = "Mismatch"
         
     if srs == "Mismatch":
-        arcpy.AddMessage("  " + field + ", row " + str(row+1) + ": Indicates a different coordinate system than previous row. Make SRS field values consistent.")
+        arcpy.AddMessage("  " + field + ", row " + str(row + 1) + ": Indicates a different coordinate system than previous row. Make SRS field values consistent.")
         raise Exception ("SRS Error. Validation Failed.")
         
     return val, srs
 
 # Validate the Excel file against specified requirements
-def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
+def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
     arcpy.AddMessage('Reading Excel file ...')
     
     # List of new rows
@@ -498,7 +510,7 @@ def ValidateExcelFile(sht, schemaFields, schemaTypes, schemaReq):
             elif schemaTypes[x] == "Double":
                 row[x], warnMsgCount = CheckTypeDouble(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg)
             elif schemaTypes[x] == "Date":
-                row[x], warnMsgCount = CheckTypeDate(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg)
+                row[x], warnMsgCount = CheckTypeDate(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg, wb)
             else:
                 arcpy.AddMessage("  " + schemaFields[x] + " does not indicate a Text, Double or Date type in the schema.")
                 raise Exception ("Type Error. Validation Failed.")   
@@ -537,7 +549,7 @@ def MakeTable(table, longFields, schemaFields, schemaTypes):
     # Add the fields to the table
     for i in range(0, len(schemaFields)):
         if (longFields[i] == True):
-            arcpy.AddMessage("  " + schemaFields[i] + " contains data longer than 255 characters, adjusting max length for this field to 2,147,483,647")
+#             arcpy.AddMessage("  " + schemaFields[i] + " contains data longer than 255 characters, adjusting max length for this field to 2,147,483,647")
             arcpy.AddField_management(table, schemaFields[i], "TEXT", "", "", 2147483647)
         else:
             arcpy.AddField_management(table, schemaFields[i], schemaTypes[i])
@@ -581,9 +593,15 @@ def CreateXYEventLayer(table, layer, srs):
     elif srs == "NAD27":
         spRef = os.path.dirname(__file__) + "\\NAD 1927.prj"
     else:
-        arcpy.AddMessage("Warning!! Unable to determine spatial reference system so using WGS84. Reprojection of the feature class will be required.")
+        arcpy.AddMessage("  Warning!! Unable to determine spatial reference system. The reference system for the data will need to be defined and then reprojected to WGS84.")
         spRef = os.path.dirname(__file__) + "\\WGS 1984.prj"
     arcpy.AddMessage("  Spatial Reference System of data is " + srs)
+    
+    try:
+        testOpen = open(spRef)
+    except:
+        arcpy.AddMessage("  Unable to find the .prj files that should be located in the same folder as the script. Download the tool again.")
+        raise Exception ("Missing Needed File")
     
     # Create the XY Event Layer
     try:
