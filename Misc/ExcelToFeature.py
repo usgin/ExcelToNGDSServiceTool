@@ -34,7 +34,7 @@ def main(argv=None):
  
     # Get the path for the folder of the Excel file (used for output of GeoDB)
     path = os.path.dirname(inExcel) + "\\"    
-    
+
     # Run it
     try:
         schemaFields, schemaTypes, schemaReq, layerNames = ReadSchema(schemaFile)
@@ -200,10 +200,10 @@ def CheckFields(excelFields, schemaFields):
     for i in range(len(excelFields)):
         if isinstance(excelFields[i], unicode):
             try:
-                excelFields[i] = excelFields[i].encode('UTF-8')
+                excelFields[i] = excelFields[i].encode("windows-1252")
             except:
                 arcpy.AddMessage("  Found an unrecognized character in column #" + i + " of the field names.")
-                raise Exception ("Data not in UTF-8. Validation Failed")
+                raise Exception ("Data not in Win1252 encoding. Validation Failed")
             excelFields[i] = excelFields[i].replace(" ","")
             excelFields[i] = excelFields[i].replace("\n","")   
     del i
@@ -493,10 +493,10 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
             # Convert unicode to UTF-8 encoding
             if isinstance(row[x], unicode):
                 try:
-                    row[x] = row[x].encode('UTF-8')
+                    row[x] = row[x].encode("windows-1252")
                 except:
-                    arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in + \'"+ row[x] + ".")
-                    raise Exception ("Data not in UTF-8. Validation Failed.")   
+                    arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in \'"+ row[x] + ".\'")
+                    raise Exception ("Data not in Win1252 encoding. Validation Failed.")   
                 # Remove leading and trailing whitespace
                 row[x] = row[x].strip()
 
