@@ -343,7 +343,7 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg, wb):
                                     # Otherwise change the value to the empty string
                                     else:
                                         if warnMsgCount <= maxWarnMsg:
-                                            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
+                                            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Not recognized as a date. Field not required. Deleting \'" + val + ".\'")
                                             warnMsgCount = warnMsgCount + 1
                                         val = None                               
         # If the cell value is not a string or unicode
@@ -366,7 +366,7 @@ def CheckTypeDate(val, field, req, rowNum, warnMsgCount, maxWarnMsg, wb):
                 else:
                     # Otherwise change the value to the empty string
                     if warnMsgCount <= maxWarnMsg:
-                        arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Date. Field not required. Deleting \'" + val + ".\'")
+                        arcpy.AddMessage("  " + field + ", row " + rowNum + ": Not recognized as a date. Field not required. Deleting \'" + val + ".\'")
                         warnMsgCount = warnMsgCount + 1
                     val = None
     # If the value is empty
@@ -471,11 +471,15 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
     
     # Warning message counts
     warnMsgCount = 0
-    maxWarnMsg = 20
+    maxWarnMsg = 30
     
     # Default spatial reference system
     srs = "WGS84"
 
+    # Create a list of special characters and its Win 1252 (encoding used by server) replacement
+    # If no Win 1252 replacement, replace with text (https://en.wikipedia.org/wiki/Windows-1252)
+    specialChars = {"δ": "delta", "μ": "\xB5"}
+    
     arcpy.AddMessage("Validating Excel file data ...")
     # Loop through each row of the Excel file starting with the 2nd row (1st row was already read as the field names)
     for i in range(1, sht.nrows):
@@ -490,13 +494,25 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
                 arcpy.AddMessage("Not showing anymore messages that are not errors.")
                 warnMsgCount = warnMsgCount + 1
 
-            # Convert unicode to UTF-8 encoding
+            # Search for and replace special characters
+            if isinstance(row[x], unicode):
+                for c in specialChars.keys():
+                    if row[x].find(c) != -1:
+#                         if warnMsgCount <= maxWarnMsg:
+#                             arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found a special character. Changing \'" + c + "\' to \'" + specialChars[c] + ".\'")
+#                             warnMsgCount = warnMsgCount + 1
+                        char = specialChars[c].decode("windows-1252")
+                        row[x] = row[x].replace(c, char)
+                        del char
+                del c
+
+            # Convert unicode to Win1252 encoding
             if isinstance(row[x], unicode):
                 try:
                     row[x] = row[x].encode("windows-1252")
                 except:
                     arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in \'"+ row[x] + ".\'")
-                    raise Exception ("Data not in Win1252 encoding. Validation Failed.")   
+                    raise Exception ("Data not in Windows 1252 encoding. Validation Failed.")   
                 # Remove leading and trailing whitespace
                 row[x] = row[x].strip()
 
@@ -601,7 +617,7 @@ def CreateXYEventLayer(table, layer, srs):
         testOpen = open(spRef)
     except:
         arcpy.AddMessage("  Unable to find the .prj files that should be located in the same folder as the script. Download the tool again.")
-        raise Exception ("Missing Needed File")
+        raise Exception ("Missing Needed File.")
     
     # Create the XY Event Layer
     try:
