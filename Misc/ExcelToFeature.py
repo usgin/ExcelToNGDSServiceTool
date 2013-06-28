@@ -475,10 +475,6 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
     
     # Default spatial reference system
     srs = "WGS84"
-
-    # Create a list of special characters and its Win 1252 (encoding used by server) replacement
-    # If no Win 1252 replacement, replace with text (https://en.wikipedia.org/wiki/Windows-1252)
-    specialChars = {"δ": "delta", "μ": "\xB5"}
     
     arcpy.AddMessage("Validating Excel file data ...")
     # Loop through each row of the Excel file starting with the 2nd row (1st row was already read as the field names)
@@ -493,18 +489,6 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
             if warnMsgCount == maxWarnMsg:
                 arcpy.AddMessage("Not showing anymore messages that are not errors.")
                 warnMsgCount = warnMsgCount + 1
-
-            # Search for and replace special characters
-            if isinstance(row[x], unicode):
-                for c in specialChars.keys():
-                    if row[x].find(c) != -1:
-#                         if warnMsgCount <= maxWarnMsg:
-#                             arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found a special character. Changing \'" + c + "\' to \'" + specialChars[c] + ".\'")
-#                             warnMsgCount = warnMsgCount + 1
-                        char = specialChars[c].decode("windows-1252")
-                        row[x] = row[x].replace(c, char)
-                        del char
-                del c
 
             # Convert unicode to Win1252 encoding
             if isinstance(row[x], unicode):
