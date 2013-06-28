@@ -196,7 +196,7 @@ def GetExcelFile(inExcel, sheetName):
 def CheckFields(excelFields, schemaFields):
     arcpy.AddMessage("Validating Excel fields against the schema fields ...")
         
-    # Check that all the field names are in UTF-8 then strip whitespace and carriage returns
+    # Check that all the field names are in Win-1252 then strip whitespace and carriage returns
     for i in range(len(excelFields)):
         if isinstance(excelFields[i], unicode):
             try:
@@ -490,13 +490,13 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
                 arcpy.AddMessage("Not showing anymore messages that are not errors.")
                 warnMsgCount = warnMsgCount + 1
 
-            # Convert unicode to Win1252 encoding
+            # Convert unicode to Win-1252 encoding (used by the server)
             if isinstance(row[x], unicode):
                 try:
                     row[x] = row[x].encode("windows-1252")
                 except:
                     arcpy.AddMessage("  " + schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in \'"+ row[x] + ".\'")
-                    raise Exception ("Data not in Windows 1252 encoding. Validation Failed.")   
+                    raise Exception ("Data not in Windows 1252 encoding. Validation Failed.")
                 # Remove leading and trailing whitespace
                 row[x] = row[x].strip()
 
@@ -513,7 +513,7 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
                 row[x], warnMsgCount = CheckTypeDate(row[x], schemaFields[x], schemaReq[x], str(i + 1), warnMsgCount, maxWarnMsg, wb)
             else:
                 arcpy.AddMessage("  " + schemaFields[x] + " does not indicate a Text, Double or Date type in the schema.")
-                raise Exception ("Type Error. Validation Failed.")   
+                raise Exception ("Type Error. Validation Failed.")
             
             # If the field name indicates a URI field check the URIs
             if "URI" in schemaFields[x]:
