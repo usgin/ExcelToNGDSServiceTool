@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-# Excel to NGDS Feature ArcGIS Tool
+# Excel to NGDS Service ArcGIS Tool
 # Written by Jessica Good Alisdairi at the Arizona Geological Survey, May-June 2013
 # This tool validates and converts a spreadsheet in an Excel file to a feature class 
 # ready to be deployed as an NDGS service.
@@ -22,7 +22,7 @@ except:
 
 # Main function for the Excel to NGDS Feature ArcGIS Tool
 def main(argv=None):
-    # Don't allow overwrite of geodatabase
+    # Don't allow overwriting
     arcpy.env.overwriteOutput = False
 
     # Get the parameters of the tool
@@ -42,7 +42,7 @@ def main(argv=None):
         data, longFields, srs = ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq)
         
         if len(layerNames) > 1:
-            layerName = "AllLayersTemp"
+            layerName = "AllLayers"
         else:
             layerName = layerNames[0]
   
@@ -74,9 +74,9 @@ def main(argv=None):
             # Deal with services that have multiple layers
             if len(layerNames) > 1:
                 for layer in layerNames:
-                    arcpy.CopyFeatures_management("AllLayersTemp", layer)
+                    arcpy.CopyFeatures_management("AllLayers", layer)
                     arcpy.AddMessage("Created Feature Class " + layer)
-                arcpy.Delete_management("AllLayersTemp")
+                arcpy.Delete_management("AllLayers")
                       
                 arcpy.AddMessage("  Warning! This is a service with multiple layers. All layers will be created having the same fields.") 
                 arcpy.AddMessage("  Delete any layers not being used and for each layer use the schema to delete the fields that do not belong.")    
@@ -242,6 +242,21 @@ def CheckFields(excelFields, schemaFields):
     del excep   
     return primaryURIField
 
+# Check that the values for certain fields are within a specified domain
+def CheckDomain(val, field, rowNum):
+
+    # Make sure Latitude and Longitude are within bounds
+    if field == "LatDegree" or field == "LatDegreeWGS84":
+        if not (val >= -90 and val <= 90):
+            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Latitude is not between -90 and 90.")
+            raise Exception ("Latitude Error")
+    elif field == "LongDegreeWGS84" or field == "LongDegree":
+        if not (val >= -180 and val <= 180):
+            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Longitude is not between -180 and 180.")
+            raise Exception ("Longitude Error")
+        
+    return
+
 # Perform validataion checks for values whose data type is supposed to be Text
 def CheckTypeText(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
 
@@ -293,17 +308,23 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Double. Changing \'" + val + "\' to \'-9999.\'")
                     warnMsgCount = warnMsgCount + 1
                 val = "-9999"
+                if field == "LatDegree" or field == "LatDegreeWGS84" or field == "LongDegree" or field == "LongDegreeWGS84":
+                    CheckDomain(val, field, rowNum)
             # If the field is not required change the value to the empty string
             else:
                 if warnMsgCount <= maxWarnMsg:
                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Double. Field not required. Deleting \'" + val + ".\'")
                     warnMsgCount = warnMsgCount + 1
                 val = None
+        else:
+            CheckDomain(val, field, rowNum)
     # If the value is empty
     else:
         # If the field is required change the value to -9999 
         if req != "0":
             val = "-9999"
+            if field == "LatDegree" or field == "LatDegreeWGS84" or field == "LongDegree" or field == "LongDegreeWGS84":
+                CheckDomain(val, field, rowNum)
         else:
             val = None
             
@@ -484,7 +505,7 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
         
         # Loop through each cell in the current row
         for x in range(0, sht.ncols):
-            
+
             # Only show a given number of warning messages that are not errors
             if warnMsgCount == maxWarnMsg:
                 arcpy.AddMessage("Not showing anymore messages that are not errors.")
