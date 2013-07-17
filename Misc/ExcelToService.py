@@ -662,22 +662,32 @@ def CreateFeatureClass(layer, featureClass, srs):
 #        arcpy.AddMessage(dsc.spatialReference.Name)
         
         arcpy.AddMessage("  Reprojecting from " + srs + " to WGS84 using the transformation " + trans + "....")
-        arcpy.AddMessage("  Warning! If the data indicates a region other than the continental US you may need to use a different transformation.")
+        arcpy.AddMessage("  If the data indicates a region other than the continental US you may need to use a different transformation.")
         
         # Reproject the feature class to WGS 84 and save in a temporary feature class 
         featureClassTemp = featureClass + "Temp"
         arcpy.Project_management(featureClass, featureClassTemp, outCS, trans, inCS)
-        
-        # Delete the original feature class and rename the temporary feature class the same as the original
-        arcpy.Delete_management(featureClass)
-        arcpy.Rename_management(featureClassTemp, featureClass)
 
-        # Calculate XY coordinates for the points in the feature class        
-        arcpy.AddXY_management(featureClass)
+        try:
+            # Calculate XY coordinates for the points in the feature class        
+            arcpy.AddXY_management(featureClassTemp)
+
+        except:
+            # Delete the temporary feature class since the calculation of the new X & Y values failed
+            arcpy.Delete_management(featureClassTemp)
+            
+            # The default maximum number of records on which calculations can be performed is 9500.
+            # Upon failure ouptut a message telling the user how to increase this number.
+            installDir = arcpy.GetInstallInfo()['InstallDir']
+            arcpy.AddMessage("  The MaxLocksPerFile value needs to be increased before reprojection.")
+            arcpy.AddMessage("  Open the ArcMap Advanced Settings utility in " + installDir + "Utilities\\AdvancedArcMapSettings.exe.") 
+            arcpy.AddMessage("  Click the Editor tab and update the 'Jet Engine max # of records to calculate' value to any number larger than the number of records in the current dataset.")
+            arcpy.AddMessage("  Run the tool again.")
+            raise Exception ("Reprojection Failed.")
         
         # Replace the value in the Lat & Long fields with the calculated XY coordinates
         # Update the SRS column to WGS 84
-        rows = arcpy.UpdateCursor(featureClass)
+        rows = arcpy.UpdateCursor(featureClassTemp)
         for row in rows:
             try:
                 row.LatDegree = row.POINT_Y
@@ -694,9 +704,13 @@ def CreateFeatureClass(layer, featureClass, srs):
         # Delete cursor and row objects to remove locks on the data 
         del row, rows
         
-        arcpy.DeleteField_management(featureClass, ["POINT_Y", "POINT_X"])
+        arcpy.DeleteField_management(featureClassTemp, ["POINT_Y", "POINT_X"])
         arcpy.AddMessage("  Finished Reprojecting.")
-
+        
+        # Delete the original feature class and rename the temporary feature class the same as the original
+        arcpy.Delete_management(featureClass)
+        arcpy.Rename_management(featureClassTemp, featureClass)
+       
     arcpy.AddMessage("Finished Creating Feature Class.")
     return
 
