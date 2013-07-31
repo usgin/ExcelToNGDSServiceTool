@@ -245,15 +245,18 @@ def CheckFields(excelFields, schemaFields):
 # Check that the values for certain fields are within a specified domain
 def CheckDomain(val, field, rowNum):
 
-    # Make sure Latitude and Longitude are within bounds
     if field == "LatDegree" or field == "LatDegreeWGS84":
         if not (val >= -90 and val <= 90):
-            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Latitude is not between -90 and 90.")
+            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Latitude must be between -90 and 90.")
             raise Exception ("Latitude Error")
     elif field == "LongDegreeWGS84" or field == "LongDegree":
         if not (val >= -180 and val <= 180):
-            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Longitude is not between -180 and 180.")
+            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Longitude must be between -180 and 180.")
             raise Exception ("Longitude Error")
+    elif field == "MaximumRecordedTemperature" or field == "MeasuredTemperature" or field == "CorrectedTemperature" or field == "Temperature":
+        if not (val >= 0 and val <= 220):
+            arcpy.AddMessage("  " + field + ", row " + rowNum + ": Temperature must be between 0 and 220.")
+            raise Exception ("Domain Error")
         
     return
 
@@ -279,17 +282,21 @@ def CheckTypeText(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Changing \'" + val + "\' to \'Missing.\'")
                     warnMsgCount = warnMsgCount + 1
                 val = "Missing"
+                CheckDomain(val, field, rowNum)
             # If the field is not required change the value to the empty string
             else:
                 if warnMsgCount <= maxWarnMsg:
                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Text. Field not required. Deleting \'" + val + ".\'")
                     warnMsgCount = warnMsgCount + 1
                 val = ""
+        else:
+            CheckDomain(val, field, rowNum)
     # If the value is empty
     else:
         # If the field is required change the value to Missing 
         if req != "0":
             val = "Missing"
+            CheckDomain(val, field, rowNum)
     return val, warnMsgCount 
                 
 # Perform validataion checks for values whose data type is supposed to be Double 
@@ -308,8 +315,7 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
                     arcpy.AddMessage("  " + field + ", row " + rowNum + ": Type should be Double. Changing \'" + val + "\' to \'-9999.\'")
                     warnMsgCount = warnMsgCount + 1
                 val = "-9999"
-                if field == "LatDegree" or field == "LatDegreeWGS84" or field == "LongDegree" or field == "LongDegreeWGS84":
-                    CheckDomain(val, field, rowNum)
+                CheckDomain(val, field, rowNum)
             # If the field is not required change the value to the empty string
             else:
                 if warnMsgCount <= maxWarnMsg:
@@ -323,8 +329,7 @@ def CheckTypeDouble(val, field, req, rowNum, warnMsgCount, maxWarnMsg):
         # If the field is required change the value to -9999 
         if req != "0":
             val = "-9999"
-            if field == "LatDegree" or field == "LatDegreeWGS84" or field == "LongDegree" or field == "LongDegreeWGS84":
-                CheckDomain(val, field, rowNum)
+            CheckDomain(val, field, rowNum)
         else:
             val = None
             
