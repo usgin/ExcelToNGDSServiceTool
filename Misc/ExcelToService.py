@@ -254,14 +254,14 @@ def CheckDomain(val, field, rowNum, msgs):
             arcpy.AddError(field + ", row " + rowNum + ": Longitude must be between -180 and 180. (Currently " + str(val) + ".)")
             msgs['errCount'] += 1
     elif field == "MaximumRecordedTemperature" or field == "MeasuredTemperature" or field == "CorrectedTemperature" or field == "Temperature":
-        if not (val >= 0 and val <= 220):
+        if not (val >= 0 and val <= 220) and val != -999 and val != -9999:
             arcpy.AddError(field + ", row " + rowNum + ": Temperature must be between 0 and 220. (Currently " + str(val) + ".)")
             msgs['errCount'] += 1
     elif field == "TemperatureUnits":
         if val == "f": val = "F"
         if val == "c": val = "C"
         if val != "F" and val != "C":
-            arcpy.AddError(field + ", row " + rowNum + ": Temperature must be between either F or C. (Currently " + str(val) + ".)")
+            arcpy.AddError(field + ", row " + rowNum + ": Temperature must be either F or C. (Currently " + str(val) + ".)")
             msgs['errCount'] += 1
         
     return val
@@ -323,7 +323,7 @@ def CheckTypeDouble(val, field, req, rowNum, msgs):
                 if msgs['warnCount'] <= msgs['warnMax']:
                     arcpy.AddWarning(field + ", row " + rowNum + ": Type should be Double. Changing " + val + " to -9999.")
                     msgs['warnCount'] +=  1
-                val = "-9999"
+                val = -9999
                 val = CheckDomain(val, field, rowNum, msgs)
             # If the field is not required change the value to the empty string
             else:
@@ -337,7 +337,7 @@ def CheckTypeDouble(val, field, req, rowNum, msgs):
     else:
         # If the field is required change the value to -9999 
         if req != "0":
-            val = "-9999"
+            val = -9999
             if msgs['warnCount'] <= msgs['warnMax']:
                 arcpy.AddWarning(field + ", row " + rowNum + ": Value in required field is blank. Changing it to -9999.")
                 msgs['warnCount'] +=  1
