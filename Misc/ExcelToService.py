@@ -254,8 +254,8 @@ def CheckDomain(val, field, rowNum, msgs):
             arcpy.AddError(field + ", row " + rowNum + ": Longitude must be between -180 and 180. (Currently " + str(val) + ".)")
             msgs['errCount'] += 1
     elif field == "MaximumRecordedTemperature" or field == "MeasuredTemperature" or field == "CorrectedTemperature" or field == "Temperature":
-        if not (val >= 0 and val <= 220) and val != -999 and val != -9999:
-            arcpy.AddError(field + ", row " + rowNum + ": Temperature must be between 0 and 220. (Currently " + str(val) + ".)")
+        if not (val >= 0 and val <= 999) and val != -999 and val != -9999:
+            arcpy.AddError(field + ", row " + rowNum + ": Temperature must be between 0 and 999. (Currently " + str(val) + ".)")
             msgs['errCount'] += 1
     elif field == "TemperatureUnits":
         if val == "f": val = "F"
@@ -523,10 +523,6 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
     uris = []
     
     # Message counts
-#     warnMsgCount = 0
-#     maxWarnMsg = 30
-#     errMsgCount = 0
-#     maxErrMsg = 30
     msgs = {'warnCount': 0, 'warnMax': 15, 'errCount': 0, 'errMax': 25}
     
     tempUnits = ""
@@ -562,6 +558,11 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
                     msgs['errCount'] += 1
                 # Remove leading and trailing whitespace
                 row[x] = row[x].strip()
+            
+            # Excel stores #N/A with the internal code 42, change it back to #N/A
+            if isinstance(row[x], int):
+                if row[x] == 42:
+                    row[x] = "#N/A"
 
             # If the value is "nil:missing" change it to "Missing"
             if row[x] == "nil:missing":
