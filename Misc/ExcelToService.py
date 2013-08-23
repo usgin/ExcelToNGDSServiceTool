@@ -163,7 +163,9 @@ def ReadSchema(schemaFile):
             schemaTypes[i] = "Text"
         elif (t == "xs:double"):
             schemaTypes[i] = "Double"
-        if "Date" in schemaFields[i]:
+        elif (t == "xs:date"):
+            schemaTypes[i] = "Date"
+        if "Date" in schemaFields[i] or "Time" in schemaFields[i]:
             schemaTypes[i] = "Date"
     del i, t
      
