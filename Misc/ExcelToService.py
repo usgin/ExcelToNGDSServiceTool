@@ -230,13 +230,16 @@ def CheckFields(excelFields, schemaFields):
         if (excep == True) and (eF == sF):
             arcpy.AddMessage("  " + str(eF) + " == " + str(sF))
         if (eF != sF):
+            if eF == "":
+                eF = "Empty Cell"
             arcpy.AddMessage("  " + str(eF) + " != " + str(sF))
             excep = True
     del eF, sF
     
     # If an error with the Excel fields has been found raise and Exception
     if (excep == True):
-        raise Exception ("Schema Mismatch Error. Validation Failed")
+        arcpy.AddError("Make sure the first row contains the field headings and they match the schema exactly.")
+        raise Exception ("Schema Mismatch Error. Validation Failed. ")
     # Otherwise continue
     else:
         arcpy.AddMessage("Field Validation Successful.")
