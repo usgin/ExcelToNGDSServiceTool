@@ -554,12 +554,13 @@ def ValidateExcelFile(sht, wb, schemaFields, schemaTypes, schemaReq):
                 arcpy.AddWarning("Fix the errors already displayed and then run the tool again. Warnings do not need to be fixed.")
                 raise Exception ("Validation Failed.")
 
-            # Convert unicode to Win-1252 encoding (used by the server)
+            # Check that conversion from unicode to utf-8 and Win-1252 encoding (used by the server) is possible
             if isinstance(row[x], unicode):
                 try:
+                    row[x] = row[x].encode("utf-8")
                     row[x] = row[x].encode("windows-1252")
                 except:
-                    arcpy.AddError(schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in "+ row[x] + ".")
+                    arcpy.AddError(schemaFields[x] + ", row " + str(i+1) + ": Found an unrecognized character in \'"+ row[x] + ".\'")
                     msgs['errCount'] += 1
                 # Remove leading and trailing whitespace
                 row[x] = row[x].strip()
