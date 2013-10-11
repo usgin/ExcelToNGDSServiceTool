@@ -160,12 +160,13 @@ def ReadSchema(schemaFile):
     # Read the field types from the schema
     for i, t in enumerate(schemaTypes):
         if (t == "") or (t == "xs:string"):
-            schemaTypes[i] = "Text"
+            if "Date" in schemaFields[i] or "Time" in schemaFields[i]:
+                schemaTypes[i] = "Date"
+            else:
+                schemaTypes[i] = "Text"
         elif (t == "xs:double"):
             schemaTypes[i] = "Double"
         elif (t == "xs:date"):
-            schemaTypes[i] = "Date"
-        if "Date" in schemaFields[i] or "Time" in schemaFields[i]:
             schemaTypes[i] = "Date"
     del i, t
      
