@@ -3,7 +3,7 @@
 This tool validates and converts a spreadsheet in an Excel content model to a geodatabase ready to be deployed as a NGDS Service.
 
 ### Requirements:
-- ArcGIS 10.0 or 10.1
+- ArcGIS 10.0, 10.1 or 10.2
 - Python 2.6
 
 ### Installation:
