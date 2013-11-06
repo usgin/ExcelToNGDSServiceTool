@@ -430,8 +430,8 @@ def CheckURIs(val, field, row, uris, primaryURIField, msgs):
     val = val.replace(" ","")
     val = val.replace("\n","")
     
-    # If the value is not blank or the word Missing and the field name is not MetadataURI or SourceURI
-    if val != "" and val !="Missing" and field != "MetadataURI" and field != "SourceURI":
+    # If the value is not blank or the word Missing and the field name is not MetadataURI or SourceURI or SourceCitationURI
+    if val != "" and val !="Missing" and field != "MetadataURI" and field != "SourceURI" and field != "SourceCitationURI":
         # If the value does not start with "http://resources.usgin.org/uri-gin/"
         if val.find("http://resources.usgin.org/uri-gin/") != 0:
             arcpy.AddError(field + ", row " + row + ": URI needs to start with http://resources.usgin.org/uri-gin/ (Currently " + val + ".)")
