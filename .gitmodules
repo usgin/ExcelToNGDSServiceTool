@@ -1,0 +1,3 @@
+[submodule "usginmodels"]
+	path = usginmodels
+	url = git@github.com:usgin/usginmodels.git
