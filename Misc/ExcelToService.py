@@ -7,17 +7,22 @@
 """
 
 # import required modules
+import csv
 import arcpy
 from arcpy import env
 import os
-import sys
+import datetime
 import dateutil.parser
-import csv
-import usginmodels
+try:
+    import usginmodels
+except:
+    arcpy.AddError("There was a problem with the usginmodels. Check that http://schemas.usgin.org/contentmodels.json is up and running.")
+    raise Exception
 try:
     import xlrd
 except:
     arcpy.AddError("Import of XLRD module failed.\nThe XLRD module can be downloaded from: http://pypi.python.org/pypi/xlrd")
+    raise Exception
 
 # Main function for the Excel to NGDS Feature ArcGIS Tool
 def main(argv=None):
@@ -40,11 +45,10 @@ def main(argv=None):
 
     # If data is in a sheet in an Excel file convert to CSV, otherwise just read
     if sheet_name != "N/A":
-        csv_dict = excel_to_csv(in_file, sheet_name)
+        csv_text = excel_to_csv(in_file, sheet_name)
     else:
-        csv_file = open(in_file)
-        csv_dict = csv.DictReader(csv_file)
-        csv_file.close()
+        csv_text = open(in_file)
+    csv_dict = csv.DictReader(csv_text)
 
     if csv_dict:
         # Pass in the the CSV as a dictionary, the schema to validate against and the layer name
@@ -82,13 +86,6 @@ def main(argv=None):
         except Exception as err:
             arcpy.AddError("Error: {0}".format(err))
 
-    try:
-        # Delete the temporary csv file
-        csv_file_name = os.path.splitext(os.path.basename(in_file))[0] + "TempCSV.csv"
-        os.remove(path + csv_file_name)
-    except:
-        pass
-
     return
 
 # Get a list of sheet names for the selected Excel file
@@ -106,7 +103,7 @@ def get_schema_uri(schema_name):
         versions_dict[m.title + " " + v.version] = v.uri
     return versions_dict[schema_name]
 
-# Convert the Excel sheet to a CSV file
+# Convert the Excel sheet to CSV
 def excel_to_csv(in_file, sheet_name):
 
     # Get the path for the folder of the Excel file (used for output of GeoDB)
@@ -118,11 +115,7 @@ def excel_to_csv(in_file, sheet_name):
         arcpy.AddError("Invalid Sheet Name")
         return None
 
-    # Make a temporary csv file to store the data
-    csv_file_name = os.path.splitext(os.path.basename(in_file))[0] + "TempCSV.csv"
-    csvFile = open(path + csv_file_name, "wb")
-    wr = csv.writer(csvFile, quoting=csv.QUOTE_ALL)
-
+    csv_rows = []
     for rownum in xrange(sht.nrows):
         row = sht.row_values(rownum)
         for colnum, col in enumerate(xrange(sht.ncols)):
@@ -159,13 +152,10 @@ def excel_to_csv(in_file, sheet_name):
                 if cell.value == int(cell.value):
                     cell.value = '%d'%cell.value
 
-            row[colnum] = cell.value
-        wr.writerow(row)
-    csvFile.close()
+            row[colnum] = "\""+ str(cell.value) + "\""
+        csv_rows.append(','.join(row))
 
-    my_csv = open(path + csv_file_name, "r")
-    csv_text = csv.DictReader(my_csv)
-    return csv_text
+    return csv_rows
 
 # Print the error messages
 def print_errors(valid, errors, dataCorrected):
@@ -197,10 +187,10 @@ def print_errors(valid, errors, dataCorrected):
                 msgs['errCount'] += 1
         elif "Notice!" in e:
             if msgs['noteCount'] < msgs['noteMax']:
-                arcpy.AddMessage("  " + e)
+                arcpy.AddMessage(e)
                 msgs['noteCount'] += 1
             elif msgs['noteCount'] == msgs['noteMax']:
-                print "Max number of notices reached (" + str(msgs['noteMax']) + "). Not showing anymore messages that are not warnings or errors."
+                arcpy.AddMessage("Max number of notices reached (" + str(msgs['noteMax']) + "). Not showing anymore messages that are not warnings or errors.")
                 msgs['noteCount'] += 1
         else:
             print e
