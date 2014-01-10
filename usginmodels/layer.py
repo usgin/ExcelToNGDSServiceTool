@@ -37,6 +37,9 @@ class Layer():
                         errors.append("Error! " + f.field_name + " is a required field but was not found in the imported file.")
                         return False, errors, [], {}, ""
                     else:
+                        msg = "Warning! " + f.field_name + " was not found in the imported file but this is not a required field so ignoring."
+                        if not msg in errors:
+                            errors.append(msg)
                         data = ""
 
                 # Check encoding of data
