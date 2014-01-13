@@ -10,8 +10,8 @@ class Layer():
         self.fields = [Field(f) for f in fields_dict]
 
 
-    def validate_file(self, csv_file):
-        errors = []
+    def validate_file(self, csv_text):
+        messages = []
         valid = True
 
         # Create the object for the corrected data and don't include the first field (OBJECTID) or last field (Shape)
@@ -25,7 +25,7 @@ class Layer():
         srs = ""
         long_fields = {}
 
-        for i, row in enumerate(csv_file):
+        for i, row in enumerate(csv_text):
             rowCorrected = []
             for f in self.fields[1:][:-1]:
 
@@ -34,42 +34,42 @@ class Layer():
                     data = row[f.field_name]
                 except:
                     if f.field_optional == False:
-                        errors.append("Error! " + f.field_name + " is a required field but was not found in the imported file.")
-                        return False, errors, [], {}, ""
+                        messages.append("Error! " + f.field_name + " is a required field but was not found in the imported file.")
+                        return False, messages, [], {}, ""
                     else:
                         msg = "Warning! " + f.field_name + " was not found in the imported file but this is not a required field so ignoring."
-                        if not msg in errors:
-                            errors.append(msg)
+                        if not msg in messages:
+                            messages.append(msg)
                         data = ""
 
                 # Check encoding of data
                 encoding_error = check_encoding(data)
-                valid, errors = addError(i, valid, encoding_error, errors)
+                valid, messages = addError(i, valid, encoding_error, messages)
 
                 if not encoding_error:
                     # Check data types
                     type_error, data = f.validate_field(data)
-                    valid, errors = addError(i,valid, type_error, errors)
+                    valid, messages = addError(i,valid, type_error, messages)
 
                     # Fix minor formatting issues
                     format_error, data = f.fix_format(data)
-                    valid, errors = addError(i, valid, format_error, errors)
+                    valid, messages = addError(i, valid, format_error, messages)
 
                     # Check URIs
                     uri_error, data, used_uris = f.check_uri(data, primary_uri_field, used_uris)
-                    valid, errors = addError(i, valid, uri_error, errors)
+                    valid, messages = addError(i, valid, uri_error, messages)
 
                     # Check temperature units
                     temp_units_error, data, temp_units = f.check_temp_units(data, temp_units)
-                    valid, errors = addError(i, valid, temp_units_error, errors)
+                    valid, messages = addError(i, valid, temp_units_error, messages)
 
                     # Check SRS
                     srs_error, data, srs = f.check_srs(data, srs)
-                    valid, errors = addError(i, valid, srs_error, errors)
+                    valid, messages = addError(i, valid, srs_error, messages)
 
                     # Check Domain
                     domain_error, data = f.check_domain(data)
-                    valid, errors = addError(i, valid, domain_error, errors)
+                    valid, messages = addError(i, valid, domain_error, messages)
 
                     # Check length of data
                     long_fields = f.check_field_length(data, long_fields)
@@ -77,7 +77,7 @@ class Layer():
                 rowCorrected.append(data)
             dataCorrected.append(rowCorrected)
 
-        return valid, errors, dataCorrected, long_fields, srs
+        return valid, messages, dataCorrected, long_fields, srs
 
 def get_primary_uri_field(fields):
     """Find the first field name containing URI"""

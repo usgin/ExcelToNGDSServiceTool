@@ -2,7 +2,7 @@
 Here we get to define a public API people can use when they `import usginmodels`
 """
 import re
-
+import csv
 from exceptions import *
 from exceptions import InvalidUri, InvalidLayer
 from model_cache import ModelCache
@@ -105,4 +105,5 @@ def get_layer(uri, layer_name = ""):
 def validate_file(csv_file, uri, layer_name = ""):
     """Return boolean and validation errors"""
     layer = get_layer(uri, layer_name)
-    return layer.validate_file(csv_file)
+    csv_text = csv.DictReader(csv_file)
+    return layer.validate_file(csv_text)

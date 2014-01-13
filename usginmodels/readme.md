@@ -10,7 +10,7 @@ Start by importing the module
 import usginmodels
 ```
 
-This exposes four important functions:
+This exposes several important functions:
 
 ### usginmodels.refresh
 
@@ -76,35 +76,47 @@ layer = usginmodels.get_layer("http://schemas.usgin.org/uri-gin/ngds/dataschema/
 ### usginmodels.validate_file(csv_file, uri, layer_name = "")
 
 Pass in a URI as a string, and a **file-like object** that represents a CSV file. The layer name is **optional** but will error if the model is multi-layered.
+
 Returned:
- - a boolean specifying if the data is valid or not
- - a list of error message
- - a list of lists with the data corrected to conform to NGDS parameters
- - a dictionary with field names as the key and True or False as the value representing whether or not any data in that field is over 255 characters in length
- - a string indicating the spatial reference system of the dataset
-If there are error messages but valid is True, the file is only valid if the returned corrected data is used.
+ 1. a boolean specifying if the data is Valid* or not
+ 2. a list of messages**
+ 3. a list of lists with the data corrected to conform to NGDS parameters
+ 4. a dictionary with field names as the key and True or False as the value representing whether or not any data in that field is over 255 characters in length
+ 5. a string indicating the spatial reference system of the dataset
+
+\* If a file is returned as Valid but the messages list is not empty, the file is valid only if the corrected data is used.
+
+\** The messages list returns three types of messages, differentiated by the the words Notice!, Warning! and Error!.
+- **Notice!**: These are messages which indicate basic formatting changes made by the validation routine to the data, such as whitespace removed or the required / added to the end of a resource URI.
+- **Warning!**: These are messages which indicate issues that the validation routine attempts to correct programmatically. For example, if a field is supposed to be double and is a required field, but the data is blank, the placeholder -9999 will be inserted as the data. The user will need to review these message to verify that the changes made by the validation routine are acceptable. If not, manual changes will need to be made and the validation routine run again.
+- **Error!**: These are messages which indicate issues which will cause the file to be invalid and which need manual correction by the user before running the validation routine again.
 
 Example Usage:
 
 ```python
 import csv
 
-my_csv = open("AZRockChemistryUSeries.csv", "r")
-csv_text = csv.DictReader(my_csv)
-
-valid, errors, dataCorrected, long_fields, srs = usginmodels.validate_file(
-    csv_text,
+csv_file = open("AZRockChemistryUSeries.csv", "r")
+valid, messages, dataCorrected, long_fields, srs = usginmodels.validate_file(
+    csv_file,
     "http://schemas.usgin.org/uri-gin/ngds/dataschema/rockchemistry",
     "USeries"
 )
 
-if valid and len(errors) == 0:
-    print "Hurrah the document is valid! However, the corrected data should be used to ensure data integrity."
-elif valid and len(errors) != 0:
+if valid and messages:
     print "The document is valid if the changes below are acceptable."
+elif valid and not messages:
+    print "The document is valid."
 else:
-    print "Not Valid! Error messages:"
-
-for e in errors:
-    print e
+   print "Not Valid! Error messages:"
+   
+for m in messages:
+    if "Warning!" in m:
+        print "* " + m
+    elif "Error!" in m:
+        print m
+    elif "Notice!" in m:
+        print m
+    else:
+        print m
 ```

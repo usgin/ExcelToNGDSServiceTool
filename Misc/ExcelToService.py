@@ -45,15 +45,14 @@ def main(argv=None):
 
     # If data is in a sheet in an Excel file convert to CSV, otherwise just read
     if sheet_name != "N/A":
-        csv_text = excel_to_csv(in_file, sheet_name)
+        csv_file = excel_to_csv(in_file, sheet_name)
     else:
-        csv_text = open(in_file)
-    csv_dict = csv.DictReader(csv_text)
+        csv_file = open(in_file)
 
-    if csv_dict:
+    if csv_file:
         # Pass in the the CSV as a dictionary, the schema to validate against and the layer name
-        valid, errors, dataCorrected, long_fields, srs = usginmodels.validate_file(csv_dict, schema_uri, layer_name)
-        print_errors(valid, errors, dataCorrected)
+        valid, messages, dataCorrected, long_fields, srs = usginmodels.validate_file(csv_file, schema_uri, layer_name)
+        print_errors(valid, messages, dataCorrected)
 
         try:
             if (validate_only == "false" and valid == True):
@@ -158,42 +157,42 @@ def excel_to_csv(in_file, sheet_name):
     return csv_rows
 
 # Print the error messages
-def print_errors(valid, errors, dataCorrected):
+def print_errors(valid, messages, dataCorrected):
     # Message counts
     msgs = {'warnCount': 0, 'warnMax': 25, 'errCount': 0, 'errMax': 25, 'noteCount': 0, 'noteMax': 5}
 
-    if valid and errors:
+    if valid and messages:
         arcpy.AddMessage("The document is valid if the changes below are acceptable.")
-    elif valid and not errors:
+    elif valid and not messages:
         arcpy.AddMessage("The document is valid.")
     else:
         arcpy.AddMessage("Not Valid! Error messages:")
 
-    # Only print warnings and error messages
-    for e in errors:
-        if "Warning!" in e:
+    # Only print notices, warnings and error messages
+    for m in messages:
+        if "Warning!" in m:
             if msgs['warnCount'] < msgs['warnMax']:
-                arcpy.AddWarning(e)
+                arcpy.AddWarning(m)
                 msgs['warnCount'] += 1
             elif msgs['warnCount'] == msgs['warnMax']:
                 arcpy.AddWarning("Max number of warning messages reached (" + str(msgs['warnMax']) + "). Not showing anymore warnings that are not errors.")
                 msgs['warnCount'] += 1
-        elif "Error!" in e:
+        elif "Error!" in m:
             if msgs['errCount'] < msgs['errMax']:
-                arcpy.AddError(e)
+                arcpy.AddError(m)
                 msgs['errCount'] += 1
             elif msgs['errCount'] == msgs['errMax']:
                 arcpy.AddError("Max number of error messages reached (" + str(msgs['errMax']) + "). Fix indicated errors and import again.")
                 msgs['errCount'] += 1
-        elif "Notice!" in e:
+        elif "Notice!" in m:
             if msgs['noteCount'] < msgs['noteMax']:
-                arcpy.AddMessage(e)
+                arcpy.AddMessage(m)
                 msgs['noteCount'] += 1
             elif msgs['noteCount'] == msgs['noteMax']:
                 arcpy.AddMessage("Max number of notices reached (" + str(msgs['noteMax']) + "). Not showing anymore messages that are not warnings or errors.")
                 msgs['noteCount'] += 1
         else:
-            print e
+            arcpy.AddMessage(m)
     return
 
 # Create the personal Geodatabase (Microsoft Access DB)
