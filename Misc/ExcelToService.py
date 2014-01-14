@@ -39,6 +39,8 @@ def main(argv=None):
 	
 	# Get the path for the folder of the Excel file (used for output of GeoDB)
     path = os.path.dirname(in_file) + "\\"
+
+    # Paste from development environment below here
 	
     schema_uri = get_schema_uri(schema_name)
     layer_info = usginmodels.get_layer(schema_uri, layer_name)
@@ -150,6 +152,11 @@ def excel_to_csv(in_file, sheet_name):
             if isinstance(cell.value, float):
                 if cell.value == int(cell.value):
                     cell.value = '%d'%cell.value
+
+            # Change any single quotes already in the data to double quotes since
+            # entire data values in the csv are enclosed with single quotes
+            if isinstance(cell.value, str):
+                cell.value = str(cell.value).replace("\"","\"\"")
 
             row[colnum] = "\""+ str(cell.value) + "\""
         csv_rows.append(','.join(row))

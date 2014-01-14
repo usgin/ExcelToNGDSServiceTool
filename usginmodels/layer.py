@@ -1,3 +1,4 @@
+import re
 from field import Field
 
 class Layer():
@@ -44,32 +45,32 @@ class Layer():
 
                 # Check encoding of data
                 encoding_error = check_encoding(data)
-                valid, messages = addError(i, valid, encoding_error, messages)
+                valid, messages = addMessage(i, valid, encoding_error, messages)
 
                 if not encoding_error:
                     # Check data types
                     type_error, data = f.validate_field(data)
-                    valid, messages = addError(i,valid, type_error, messages)
+                    valid, messages = addMessage(i,valid, type_error, messages)
 
                     # Fix minor formatting issues
                     format_error, data = f.fix_format(data)
-                    valid, messages = addError(i, valid, format_error, messages)
+                    valid, messages = addMessage(i, valid, format_error, messages)
 
                     # Check URIs
                     uri_error, data, used_uris = f.check_uri(data, primary_uri_field, used_uris)
-                    valid, messages = addError(i, valid, uri_error, messages)
+                    valid, messages = addMessage(i, valid, uri_error, messages)
 
                     # Check temperature units
                     temp_units_error, data, temp_units = f.check_temp_units(data, temp_units)
-                    valid, messages = addError(i, valid, temp_units_error, messages)
+                    valid, messages = addMessage(i, valid, temp_units_error, messages)
 
                     # Check SRS
                     srs_error, data, srs = f.check_srs(data, srs)
-                    valid, messages = addError(i, valid, srs_error, messages)
+                    valid, messages = addMessage(i, valid, srs_error, messages)
 
                     # Check Domain
                     domain_error, data = f.check_domain(data)
-                    valid, messages = addError(i, valid, domain_error, messages)
+                    valid, messages = addMessage(i, valid, domain_error, messages)
 
                     # Check length of data
                     long_fields = f.check_field_length(data, long_fields)
@@ -100,11 +101,21 @@ def check_encoding(data):
 
     return msg
 
-def addError(i, valid, error, errors):
+def addMessage(row_num, valid, new_msg, messages):
     """ Add error message to the list of errors and set the validity"""
 
-    if error:
-        if "Error" in error:
+    if new_msg:
+        if "Error" in new_msg:
             valid = False
-        errors.append("Row " + str(i+1) + " " + error)
-    return valid, errors
+
+        # If the message is already in the messages list add the row number to the current message
+        match = None
+        for i, msg in enumerate(messages):
+            match = re.search("Rows? ([\d,?]*) " + new_msg, msg)
+            if match:
+                messages[i] = "Rows " + match.group(1) + "," + str(row_num + 1) + " " + new_msg
+                return valid, messages
+        # If the message is not already in the messages list add it
+        if not match:
+            messages.append("Row " + str(row_num + 1) + " " + new_msg)
+    return valid, messages
