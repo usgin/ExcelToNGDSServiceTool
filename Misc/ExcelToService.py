@@ -257,15 +257,13 @@ def InsertData(table, data, fields_info):
         for d in data:
             row = insertCur.newRow()
             for x in range(len(d)):
-                if field_types[x] == "dateTime":
-                    row.setValue(field_names[x], dateutil.parser.parse(d[x]))
-                elif field_types[x] == "double":
-                    if d[x] == "":
-                        row.setValue(field_names[x], None)
+                if d[x] == "":
+                    row.setValue(field_names[x], None)
+                else:
+                    if field_types[x] == "dateTime":
+                        row.setValue(field_names[x], dateutil.parser.parse(d[x]))
                     else:
                         row.setValue(field_names[x], d[x])
-                else:
-                    row.setValue(field_names[x], d[x])
             insertCur.insertRow(row)
     del row, insertCur
     
