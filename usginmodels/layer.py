@@ -1,4 +1,4 @@
-import re
+from itertools import count, groupby
 from field import Field
 
 class Layer():
@@ -48,13 +48,13 @@ class Layer():
                 valid, messages = addMessage(i, valid, encoding_error, messages)
 
                 if not encoding_error:
-                    # Check data types
-                    type_error, data = f.validate_field(data)
-                    valid, messages = addMessage(i,valid, type_error, messages)
-
                     # Fix minor formatting issues
                     format_error, data = f.fix_format(data)
                     valid, messages = addMessage(i, valid, format_error, messages)
+
+                    # Check data types
+                    type_error, data = f.validate_field(data)
+                    valid, messages = addMessage(i,valid, type_error, messages)
 
                     # Check URIs
                     uri_error, data, used_uris = f.check_uri(data, primary_uri_field, used_uris)
@@ -78,6 +78,7 @@ class Layer():
                 rowCorrected.append(data)
             dataCorrected.append(rowCorrected)
 
+        messages = format_messages(messages)
         return valid, messages, dataCorrected, long_fields, srs
 
 def get_primary_uri_field(fields):
@@ -107,15 +108,31 @@ def addMessage(row_num, valid, new_msg, messages):
     if new_msg:
         if "Error" in new_msg:
             valid = False
+        match = False
 
-        # If the message is already in the messages list add the row number to the current message
-        match = None
-        for i, msg in enumerate(messages):
-            match = re.search("Rows? ([\d,?]*) " + new_msg, msg)
-            if match:
-                messages[i] = "Rows " + match.group(1) + "," + str(row_num + 1) + " " + new_msg
+        for msg in messages:
+            if new_msg == msg[1]:
+                match = True
+                msg[0].append(row_num + 1)
                 return valid, messages
-        # If the message is not already in the messages list add it
-        if not match:
-            messages.append("Row " + str(row_num + 1) + " " + new_msg)
+
+        if match == False:
+            messages.append([[row_num + 1], new_msg])
+
     return valid, messages
+
+def format_messages(messages):
+    """ Format the error messages by turing a list into a range where appropriate
+        For example: 1,2,3,4,7,8,9 becomes 1-4,7,8-9 """
+
+    messages_formatted = []
+    for msg in messages:
+        G = (list(x) for _,x in groupby(msg[0], lambda x,c=count(): next(c)-x))
+        rows_list = ",".join("-".join(map(str,(g[0],g[-1])[:len(g)])) for g in G)
+
+        if "," in rows_list or "-" in rows_list:
+            messages_formatted.append("Rows " + rows_list + " " + msg[1])
+        else:
+            messages_formatted.append("Row " + rows_list + " " + msg[1])
+
+    return messages_formatted

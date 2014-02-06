@@ -83,7 +83,7 @@ class Field():
             data_strip = data.strip()
             if data != data_strip:
                 data = data_strip
-                msg = "Notice! " + self.field_name + ": Removed trailing and leading whitespace in " + data
+                msg = "Notice! " + self.field_name + ": Removed trailing and leading whitespace"
         except:
             pass
 
