@@ -35,12 +35,13 @@ class Layer():
                     data = row[f.field_name]
                 except:
                     if f.field_optional == False:
-                        messages.append("Error! " + f.field_name + " is a required field but was not found in the imported file.")
-                        return False, messages, [], {}, ""
+                        msg = "Error! " + f.field_name + " is a required field but was not found in the imported file."
+                        valid, messages = addMessage(-1, False, msg, messages)
+                        messages = format_messages(messages)
+                        return valid, messages, [], {}, ""
                     else:
                         msg = "Warning! " + f.field_name + " was not found in the imported file but this is not a required field so ignoring."
-                        if not msg in messages:
-                            messages.append(msg)
+                        valid, messages = addMessage(-1, valid, msg, messages)
                         data = ""
 
                 # Check encoding of data
@@ -113,8 +114,9 @@ def addMessage(row_num, valid, new_msg, messages):
         for msg in messages:
             if new_msg == msg[1]:
                 match = True
-                msg[0].append(row_num + 1)
-                return valid, messages
+                if row_num + 1 != msg[0][-1]:
+                    msg[0].append(row_num + 1)
+                    return valid, messages
 
         if match == False:
             messages.append([[row_num + 1], new_msg])
