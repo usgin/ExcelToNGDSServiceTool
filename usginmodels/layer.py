@@ -25,8 +25,8 @@ class Layer():
         temp_units = ""
         srs = ""
         long_fields = {}
-		
-		# Remove trailing and leading whitespace from field names in csv file
+
+        # Remove trailing and leading whitespace from field names in csv file
         for i, field in enumerate(csv_text.fieldnames):
             csv_text.fieldnames[i] = field.strip()
 
@@ -49,7 +49,7 @@ class Layer():
                         data = ""
 
                 # Check encoding of data
-                encoding_error = check_encoding(data)
+                encoding_error = f.check_encoding(data)
                 valid, messages = addMessage(i, valid, encoding_error, messages)
 
                 if not encoding_error:
@@ -94,18 +94,6 @@ def get_primary_uri_field(fields):
             return f
 
     return None
-
-def check_encoding(data):
-    """Check that conversion to utf-8 and Win-1252 encoding (used by the server) is possible"""
-    msg = None
-
-    try:
-        data = data.encode("utf-8")
-        data = data.encode("windows-1252")
-    except:
-        msg = "Encoding Error! Found an unrecognized character in " + data + "."
-
-    return msg
 
 def addMessage(row_num, valid, new_msg, messages):
     """ Add error message to the list of errors and set the validity"""

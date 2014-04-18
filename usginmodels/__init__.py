@@ -3,6 +3,7 @@ Here we get to define a public API people can use when they `import usginmodels`
 """
 import re
 import csv
+import data
 from exceptions import *
 from exceptions import InvalidUri, InvalidLayer
 from model_cache import ModelCache
@@ -107,3 +108,10 @@ def validate_file(csv_file, uri, layer_name = ""):
     layer = get_layer(uri, layer_name)
     csv_text = csv.DictReader(csv_file)
     return layer.validate_file(csv_text)
+
+def get_service_name(version_uri):
+    this_data = data.get_service_names()
+    name = this_data.get(version_uri, None)
+    if name is None:
+        name = "Invalid"
+    return name
